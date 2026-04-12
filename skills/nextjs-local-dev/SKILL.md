@@ -147,6 +147,25 @@ Containers are great for **stateful deps** (Postgres, Redis) — see the `podman
 - Port check uses `ss` on Linux, `lsof` on macOS, `netstat` as fallback.
 - Stopping uses a BFS of `pgrep -P` walking children before killing the parent, so dev servers spawned via `npm run dev` (npm → next-router-worker → render-workers) all come down cleanly.
 
+## Env vars in worktrees
+
+Worktrees do **not** inherit `.env.local` from the main checkout, and they don't have their own `.vercel/project.json` — the Vercel link only exists in the main repo. If the dev server throws auth or missing-secret errors after `nextdev start`, pull env vars like this:
+
+```sh
+# 1. Find where the Vercel link lives
+find ~/projects/<repo> -name "project.json" -path "*/.vercel/*"
+
+# 2. Pull from the main repo, targeting the worktree's .env.local
+cd /path/to/main-repo
+vercel env pull /path/to/worktree/.env.local --yes
+
+# 3. Restart to pick up the new file
+cd /path/to/worktree
+nextdev restart
+```
+
+After pulling, `nextdev logs` should show `- Environments: .env.local` in the Next.js startup output confirming the file was loaded.
+
 ## When things go wrong
 
 - **`nextdev start` exits immediately** — check `dev.log` in the state dir; usually a missing env var or port already bound.
