@@ -36,6 +36,15 @@ link "$REPO_DIR/settings.json"                    "$CLAUDE_DIR/settings.json"
 link "$REPO_DIR/plugins/installed_plugins.json"   "$CLAUDE_DIR/plugins/installed_plugins.json"
 link "$REPO_DIR/plugins/known_marketplaces.json"  "$CLAUDE_DIR/plugins/known_marketplaces.json"
 
+echo "==> Linking repo-local skills"
+if [[ -d "$REPO_DIR/skills" ]]; then
+  for skill_path in "$REPO_DIR/skills"/*/; do
+    [[ -d "$skill_path" ]] || continue
+    skill_name="$(basename "$skill_path")"
+    link "${skill_path%/}" "$CLAUDE_DIR/skills/$skill_name"
+  done
+fi
+
 echo "==> Checking third-party skills"
 if [[ ! -f "$REPO_DIR/skills.txt" ]]; then
   echo "    no skills.txt found, skipping"
