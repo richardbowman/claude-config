@@ -46,6 +46,7 @@
       "Bash(vercel:*)",
       "Bash(turbo:*)",
       "Bash(nextdev:*)",
+      "Bash(worktree-bootstrap:*)",
       "Read",
       "Edit",
       "Write",

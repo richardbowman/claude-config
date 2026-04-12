@@ -1,0 +1,188 @@
+#!/usr/bin/env node
+// worktree-bootstrap — prep a git worktree for local dev.
+//
+// Pipeline:
+//   1. Verify cwd is a git worktree (not the main checkout)
+//   2. Install deps if node_modules is missing (detect pm from lockfile)
+//   3. Copy .env.local from main repo if the worktree has none
+//   4. Find a Podman Postgres container (<app>-pg); start it if stopped
+//   5. Derive DATABASE_URL from the container's env + port mapping
+//   6. Launch `nextdev start` with DATABASE_URL injected so that
+//      prisma.config.ts short-circuits to local Postgres instead of
+//      trying to obtain a DSQL OIDC token (which only works server-side)
+//   7. Briefly tail the dev log to flag MissingSecret / OIDC / DB errors
+//
+// Runs on Node 18+. Zero npm deps — stdlib only.
+
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync, spawn } = require('node:child_process');
+
+const die  = (m) => { process.stderr.write(`worktree-bootstrap: ${m}\n`); process.exit(1); };
+const log  = (m) => process.stdout.write(`==> ${m}\n`);
+const warn = (m) => process.stderr.write(`!! ${m}\n`);
+
+// ---------------------------------------------------------------------------
+// 1. Detect worktree + main repo
+// ---------------------------------------------------------------------------
+
+const cwd = fs.realpathSync(process.cwd());
+
+function git(args) {
+  const r = spawnSync('git', args, { encoding: 'utf8', cwd });
+  if (r.status !== 0) die(`git ${args.join(' ')} failed: ${r.stderr.trim()}`);
+  return r.stdout.trim();
+}
+
+const toplevel   = git(['rev-parse', '--show-toplevel']);
+const gitDir     = git(['rev-parse', '--absolute-git-dir']);
+const commonDir  = path.resolve(gitDir, git(['rev-parse', '--git-common-dir']));
+
+if (gitDir === commonDir) {
+  die(`not a worktree — this is the main checkout at ${toplevel}`);
+}
+
+const mainRepo = path.dirname(commonDir);  // common dir is <main>/.git
+log(`worktree: ${toplevel}`);
+log(`main:     ${mainRepo}`);
+
+// ---------------------------------------------------------------------------
+// 2. Install deps if needed
+// ---------------------------------------------------------------------------
+
+function detectPM(dir) {
+  if (fs.existsSync(path.join(dir, 'pnpm-lock.yaml')))                                         return ['pnpm', ['install', '--frozen-lockfile']];
+  if (fs.existsSync(path.join(dir, 'yarn.lock')))                                              return ['yarn', ['install', '--frozen-lockfile']];
+  if (fs.existsSync(path.join(dir, 'bun.lockb')) || fs.existsSync(path.join(dir, 'bun.lock'))) return ['bun',  ['install']];
+  if (fs.existsSync(path.join(dir, 'package.json')))                                           return ['npm',  ['ci']];
+  return null;
+}
+
+if (!fs.existsSync(path.join(toplevel, 'node_modules'))) {
+  const pm = detectPM(toplevel);
+  if (!pm) die('no package.json/lockfile in worktree');
+  log(`installing deps: ${pm[0]} ${pm[1].join(' ')}`);
+  const r = spawnSync(pm[0], pm[1], { cwd: toplevel, stdio: 'inherit', shell: process.platform === 'win32' });
+  if (r.status !== 0) die(`${pm[0]} install failed`);
+} else {
+  log('node_modules present — skipping install');
+}
+
+// ---------------------------------------------------------------------------
+// 3. Copy .env.local from main
+// ---------------------------------------------------------------------------
+
+const envSrc = path.join(mainRepo, '.env.local');
+const envDst = path.join(toplevel, '.env.local');
+if (!fs.existsSync(envSrc)) {
+  warn(`no .env.local at ${envSrc} — skipping copy; the worktree may be missing secrets`);
+} else if (fs.existsSync(envDst)) {
+  log('.env.local already in worktree — leaving alone');
+} else {
+  fs.copyFileSync(envSrc, envDst);
+  log(`copied .env.local from main -> worktree`);
+}
+
+// ---------------------------------------------------------------------------
+// 4. Find + start Podman Postgres
+// ---------------------------------------------------------------------------
+
+function hasCmd(cmd) {
+  const r = spawnSync(cmd, ['--version'], { stdio: 'ignore', shell: process.platform === 'win32' });
+  return r.status === 0;
+}
+
+let pgUrl = null;
+if (!hasCmd('podman')) {
+  warn('podman not installed — skipping local postgres check');
+} else {
+  const listRes = spawnSync('podman', ['ps', '-a', '--format', '{{.Names}}|{{.Status}}|{{.Image}}'], { encoding: 'utf8' });
+  const candidates = listRes.stdout.trim().split('\n').filter(Boolean).map(l => {
+    const [name, status, image] = l.split('|');
+    return { name, status, image };
+  }).filter(c => /postgres|pgvector|postgis/i.test(c.image) && /-pg\b/.test(c.name));
+
+  if (candidates.length === 0) {
+    warn('no local postgres container found (expected convention: <app>-pg) — skipping');
+  } else {
+    // Prefer a container whose name contains the main repo's basename
+    const prefer = path.basename(mainRepo).toLowerCase();
+    candidates.sort((a, b) => (prefer.includes(b.name.replace(/-pg$/, '')) ? 1 : 0) - (prefer.includes(a.name.replace(/-pg$/, '')) ? 1 : 0));
+    const pg = candidates[0];
+
+    if (!pg.status.startsWith('Up')) {
+      log(`starting podman postgres container: ${pg.name}`);
+      spawnSync('podman', ['start', pg.name], { stdio: 'inherit' });
+    } else {
+      log(`podman postgres container already running: ${pg.name}`);
+    }
+
+    // 5. Derive DATABASE_URL from container inspection
+    const inspectRes = spawnSync('podman', ['inspect', pg.name], { encoding: 'utf8' });
+    if (inspectRes.status === 0) {
+      const data = JSON.parse(inspectRes.stdout)[0] || {};
+      const env = {};
+      for (const line of (data.Config && data.Config.Env) || []) {
+        const idx = line.indexOf('=');
+        if (idx > 0) env[line.slice(0, idx)] = line.slice(idx + 1);
+      }
+      const ports = (data.NetworkSettings && data.NetworkSettings.Ports) || {};
+      const p5432 = Object.keys(ports).find(k => k.startsWith('5432'));
+      const hostPort = p5432 && ports[p5432] && ports[p5432][0] && ports[p5432][0].HostPort || '5432';
+
+      const user = env.POSTGRES_USER || 'postgres';
+      const pass = env.POSTGRES_PASSWORD || 'postgres';
+      const db   = env.POSTGRES_DB || 'postgres';
+      pgUrl = `postgres://${user}:${encodeURIComponent(pass)}@localhost:${hostPort}/${db}`;
+      log(`derived DATABASE_URL from ${pg.name}: ${pgUrl.replace(/:[^:@]*@/, ':****@')}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Launch nextdev with DATABASE_URL injected
+// ---------------------------------------------------------------------------
+
+log('starting dev server via nextdev');
+const devEnv = { ...process.env };
+if (pgUrl) devEnv.DATABASE_URL = pgUrl;
+
+const r = spawnSync('nextdev', ['start'], {
+  cwd: toplevel,
+  env: devEnv,
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+if (r.status !== 0) die(`nextdev start failed (exit ${r.status})`);
+
+// ---------------------------------------------------------------------------
+// 7. Sanity-check the log for common failures
+// ---------------------------------------------------------------------------
+
+// nextdev writes the log path on stdout already; give it a moment then scan.
+// We re-query nextdev for the log path rather than parsing stdout.
+setTimeout(() => {
+  const status = spawnSync('nextdev', ['status'], { cwd: toplevel, encoding: 'utf8' });
+  const m = status.stdout.match(/logs:\s+(\S+)/);
+  if (!m) return;
+  const logPath = m[1];
+  try {
+    const txt = fs.readFileSync(logPath, 'utf8').split('\n').slice(-200).join('\n');
+    const flags = [
+      [/MissingSecret|NEXTAUTH_SECRET/i,            'auth secret missing'],
+      [/OIDC|unauthorized.*dsql|token.*expired/i,   'DSQL/OIDC auth failing (DATABASE_URL not overriding?)'],
+      [/ECONNREFUSED.*5432/i,                       'postgres not reachable at 5432'],
+      [/PrismaClient.*connect/i,                    'Prisma client failed to connect'],
+    ];
+    const hits = flags.filter(([re]) => re.test(txt));
+    if (hits.length) {
+      warn('dev log shows likely issues:');
+      for (const [, label] of hits) warn(`  - ${label}`);
+      warn(`check full log: nextdev logs -n 200`);
+    } else {
+      log('dev log clean (no common error patterns)');
+    }
+  } catch { /* log not yet present, ignore */ }
+}, 3000);
