@@ -80,6 +80,23 @@ nextdev status
 nextdev logs -n 200
 ```
 
+**Checking logs after `nextdev start` (do NOT use `sleep`):**
+
+The session blocks `sleep N` (N ≥ 2) before commands. Instead, run `nextdev logs` immediately — the log file is written by the background process and will contain whatever has been emitted so far. Use `run_in_background: true` on the Bash tool call so the tool exits quickly, then read the output file when notified:
+
+```sh
+# in the Bash tool, with run_in_background: true
+nextdev logs -n 40
+```
+
+Or use Monitor to watch for the "Ready" line:
+```sh
+# streams until "Ready" appears (or timeout)
+tail -f /home/.../.local/state/nextdev/<hash>/dev.log | grep --line-buffered -m1 "Ready"
+```
+
+The hash is the last path segment shown by `nextdev start` in the `logs:` field.
+
 **User says "start a clean dev server":**
 ```sh
 nextdev stop || true
