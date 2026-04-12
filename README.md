@@ -27,6 +27,23 @@ Personal Claude Code configuration synced across machines.
 
 ## Setup on a new machine
 
+### macOS — one-shot
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/richardbowman/claude-config/main/scripts/setup-mac.sh | bash
+```
+
+Or clone first and run locally (same effect, more inspectable):
+
+```sh
+git clone https://github.com/richardbowman/claude-config.git ~/claude-config
+~/claude-config/scripts/setup-mac.sh
+```
+
+Installs Xcode CLI tools, Homebrew, git, fnm + Node LTS, Claude Code, gh, podman, Vercel CLI, and runs `bootstrap.sh`. Idempotent — safe to re-run.
+
+### Linux / manual
+
 ```sh
 git clone git@github.com:<user>/claude-config.git ~/claude-config
 ~/claude-config/bootstrap.sh
