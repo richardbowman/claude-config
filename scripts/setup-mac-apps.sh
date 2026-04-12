@@ -10,6 +10,7 @@
 #   - obsidian            notes
 #   - 1password           password manager
 #   - ghostty             terminal
+#   - podman-desktop      tray app; auto-starts the podman machine at login
 #   - cmux                Ghostty-based terminal for AI coding agents
 #                         (requires 3rd-party tap: manaflow-ai/cmux)
 set -euo pipefail
@@ -29,7 +30,8 @@ brew install --cask \
   visual-studio-code \
   obsidian \
   1password \
-  ghostty
+  ghostty \
+  podman-desktop
 
 # cmux lives on a 3rd-party tap (manaflow-ai/homebrew-cmux)
 log "Installing cmux (3rd-party tap manaflow-ai/cmux)"

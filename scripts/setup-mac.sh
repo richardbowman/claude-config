@@ -156,7 +156,21 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. ~/.local/bin on PATH
+# 9. Podman VM (one-time init, then start)
+# ---------------------------------------------------------------------------
+if exists podman; then
+  if ! podman machine list --format '{{.Name}}' 2>/dev/null | grep -q .; then
+    log "Initializing Podman machine (one-time; downloads ~1GB Fedora CoreOS)"
+    podman machine init
+  fi
+  if ! podman machine list --format '{{.Running}}' 2>/dev/null | grep -q true; then
+    log "Starting Podman machine"
+    podman machine start
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 10. ~/.local/bin on PATH
 # ---------------------------------------------------------------------------
 if ! grep -q '.local/bin' "$HOME/.zshrc" 2>/dev/null; then
   log "Adding ~/.local/bin to PATH in ~/.zshrc"
@@ -174,8 +188,7 @@ cat <<'EOF'
   claude                             # first run prompts login
   gh auth login                      # authenticate GitHub CLI
   vercel login                       # authenticate Vercel CLI
-  podman machine init                # one-time Podman VM setup
-  podman machine start               # start the VM (needed before podman run)
+  # (Podman VM was initialized + started automatically above.)
 
 Verify:
   nextdev doctor                     # should show node, brew-installed tools
