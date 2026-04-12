@@ -9,7 +9,8 @@ Personal Claude Code configuration synced across machines.
 - `skills/` — hand-authored skills (see below)
 - `skills.txt` — third-party skills to install via `npx skills add`
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
-- `bootstrap.sh` — symlinks this repo into `~/.claude/` and `~/.local/bin/`, installs missing third-party skills
+- `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
+- `bootstrap.js` — does the real work: symlinks this repo into `~/.claude/` and `~/.local/bin/`, installs missing third-party skills
 
 ## Included skills
 
@@ -28,6 +29,24 @@ Personal Claude Code configuration synced across machines.
 ```sh
 git clone git@github.com:<user>/claude-config.git ~/claude-config
 ~/claude-config/bootstrap.sh
+```
+
+**Prereq: Node 18+.** If `node` isn't on PATH, `bootstrap.sh` prints install instructions and exits. Recommended:
+
+```sh
+# macOS
+brew install fnm && fnm install --lts && fnm default lts-latest
+
+# Linux
+curl -fsSL https://fnm.vercel.app/install | bash
+fnm install --lts && fnm default lts-latest
+
+# Windows (native)
+winget install Schniz.fnm
+fnm install --lts && fnm default lts-latest
+
+# add to ~/.bashrc, ~/.zshrc, or PowerShell $PROFILE
+eval "$(fnm env --use-on-cd)"
 ```
 
 The script symlinks files from this repo into `~/.claude/` (settings, marketplaces, skills) and into `~/.local/bin/` (CLIs), so later edits in either location stay in sync. Existing non-symlink files at the target are backed up to `*.backup.<timestamp>`.
