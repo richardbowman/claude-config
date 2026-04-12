@@ -100,10 +100,15 @@ fi
 for BREW in /opt/homebrew/bin/brew /usr/local/bin/brew; do
   if [[ -x "$BREW" ]]; then
     eval "$("$BREW" shellenv)"
-    # Make it permanent for future shells
-    if ! grep -q "$BREW shellenv" "$HOME/.zprofile" 2>/dev/null; then
-      echo "eval \"\$($BREW shellenv)\"" >> "$HOME/.zprofile"
-    fi
+    # Persist to both zprofile (login shells — Terminal.app default) and
+    # zshrc (non-login interactive — what `exec zsh` or tmux panes get).
+    # Without both, `exec zsh` starts a shell that can't find brew, and
+    # anything downstream (fnm, claude, vercel) silently fails to resolve.
+    for rc in "$HOME/.zprofile" "$HOME/.zshrc"; do
+      if ! grep -q "$BREW shellenv" "$rc" 2>/dev/null; then
+        echo "eval \"\$($BREW shellenv)\"" >> "$rc"
+      fi
+    done
     break
   fi
 done
@@ -221,7 +226,7 @@ cat <<'EOF'
 
 ==> Setup complete. Next steps (interactive):
 
-  exec zsh                           # pick up new PATH + fnm + brew env
+  exec zsh -l                        # login shell — sources .zprofile so brew, fnm, etc. resolve
   claude                             # first run prompts login
   gh auth login                      # authenticate GitHub CLI
   vercel login                       # authenticate Vercel CLI
