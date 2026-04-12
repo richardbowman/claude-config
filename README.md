@@ -23,6 +23,20 @@ The script symlinks files from this repo into `~/.claude/`, so any later edits i
 
 Use `~/.claude/settings.local.json` for anything that shouldn't be shared (per-machine paths, private tweaks). That file is **not** managed by this repo.
 
+Typical contents on a fresh machine — adjust paths for macOS (`/Users/<you>`) or Windows (`C:\\Users\\<you>`):
+
+```json
+{
+  "permissions": {
+    "additionalDirectories": [
+      "/home/<you>"
+    ]
+  }
+}
+```
+
+`additionalDirectories` grants read/edit access outside the current project root without prompting. Paths are absolute and differ per OS, so they can't live in the synced `settings.json`.
+
 ## Adding a skill
 
 1. Install it locally (`npx skills add <name>`)
