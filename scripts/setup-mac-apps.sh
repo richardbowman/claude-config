@@ -16,6 +16,7 @@
 set -euo pipefail
 
 log() { printf '\n==> %s\n' "$*"; }
+ok()  { printf '    ok %s\n' "$*"; }
 exists() { command -v "$1" >/dev/null 2>&1; }
 
 if ! exists brew; then
@@ -23,18 +24,28 @@ if ! exists brew; then
   exit 1
 fi
 
-# Main-repo casks
-log "Installing standard casks"
-brew install --cask \
-  google-chrome \
-  visual-studio-code \
-  obsidian \
-  1password \
-  ghostty \
-  podman-desktop
+brew_cask() {
+  local name="$1"
+  if brew list --cask "$name" >/dev/null 2>&1; then
+    ok "$name (already installed)"
+  else
+    log "brew install --cask $name"
+    brew install --cask "$name"
+  fi
+}
+
+# Main-repo casks — installed one at a time so the user can see progress
+log "Standard casks"
+for c in google-chrome visual-studio-code obsidian 1password ghostty podman-desktop; do
+  brew_cask "$c"
+done
 
 # cmux lives on a 3rd-party tap (manaflow-ai/homebrew-cmux)
-log "Installing cmux (3rd-party tap manaflow-ai/cmux)"
-brew install --cask manaflow-ai/cmux/cmux
+if brew list --cask cmux >/dev/null 2>&1; then
+  ok "cmux (already installed)"
+else
+  log "brew install --cask manaflow-ai/cmux/cmux"
+  brew install --cask manaflow-ai/cmux/cmux
+fi
 
 log "Done. Apps installed into /Applications."

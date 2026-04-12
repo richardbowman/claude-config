@@ -23,7 +23,30 @@
 set -euo pipefail
 
 log() { printf '\n==> %s\n' "$*"; }
+ok()  { printf '    ok %s\n' "$*"; }
 exists() { command -v "$1" >/dev/null 2>&1; }
+
+# Install a brew formula with explicit per-formula logging, so the user
+# can see exactly what's happening during multi-minute downloads.
+brew_formula() {
+  local name="$1"
+  if brew list --formula "$name" >/dev/null 2>&1; then
+    ok "$name (already installed)"
+  else
+    log "brew install $name"
+    brew install "$name"
+  fi
+}
+
+brew_cask() {
+  local name="$1"
+  if brew list --cask "$name" >/dev/null 2>&1; then
+    ok "$name (already installed)"
+  else
+    log "brew install --cask $name"
+    brew install --cask "$name"
+  fi
+}
 
 # Homebrew's installer prompts for your password via sudo. If this script
 # was run via `curl ... | bash`, stdin is the pipe (not a TTY) and sudo
@@ -88,8 +111,10 @@ done
 # ---------------------------------------------------------------------------
 # 3. Core brews
 # ---------------------------------------------------------------------------
-log "Installing core brews: git fnm gh podman"
-brew install git fnm gh podman
+log "Core brews: git, fnm, gh, podman"
+for f in git fnm gh podman; do
+  brew_formula "$f"
+done
 
 # ---------------------------------------------------------------------------
 # 4. Node via fnm
@@ -100,7 +125,9 @@ if ! grep -q 'fnm env --use-on-cd' "$HOME/.zshrc" 2>/dev/null; then
 fi
 eval "$(fnm env --use-on-cd)"
 
-if ! fnm list | grep -q 'v[0-9]'; then
+if fnm list | grep -q 'v[0-9]'; then
+  ok "Node already installed via fnm ($(fnm current 2>/dev/null || echo 'default'))"
+else
   log "Installing Node LTS via fnm"
   fnm install --lts
   fnm default lts-latest
@@ -114,16 +141,19 @@ fi
 # Pick one. Does NOT auto-update — run `brew upgrade claude-code` to update.
 # Alternative: native installer that auto-updates:
 #   curl -fsSL https://claude.ai/install.sh | bash
-if ! exists claude; then
-  log "Installing Claude Code (Homebrew cask: claude-code)"
-  brew install --cask claude-code
+if exists claude; then
+  ok "Claude Code already installed ($(claude --version 2>/dev/null || echo 'present'))"
+else
+  brew_cask claude-code
 fi
 
 # ---------------------------------------------------------------------------
 # 6. Vercel CLI (npm)
 # ---------------------------------------------------------------------------
-if ! exists vercel; then
-  log "Installing Vercel CLI"
+if exists vercel; then
+  ok "Vercel CLI already installed ($(vercel --version 2>/dev/null | head -1 || echo 'present'))"
+else
+  log "Installing Vercel CLI (npm install -g vercel)"
   npm install -g vercel
 fi
 
