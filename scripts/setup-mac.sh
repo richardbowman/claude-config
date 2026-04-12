@@ -156,16 +156,23 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Podman VM (one-time init, then start)
+# 9. Podman VM — start if already initialized, otherwise print instructions
 # ---------------------------------------------------------------------------
+# `podman machine init` pulls a ~1GB Fedora CoreOS image and some versions
+# prompt for provider/resources. Both of those behave badly inside a
+# non-interactive script (opaque progress, silent hangs). Leave init for
+# the user; auto-start a machine that's already initialized.
 if exists podman; then
-  if ! podman machine list --format '{{.Name}}' 2>/dev/null | grep -q .; then
-    log "Initializing Podman machine (one-time; downloads ~1GB Fedora CoreOS)"
-    podman machine init
-  fi
-  if ! podman machine list --format '{{.Running}}' 2>/dev/null | grep -q true; then
-    log "Starting Podman machine"
-    podman machine start
+  if podman machine list --format '{{.Name}}' 2>/dev/null | grep -q .; then
+    if ! podman machine list --format '{{.Running}}' 2>/dev/null | grep -q true; then
+      log "Starting existing Podman machine"
+      podman machine start
+    fi
+  else
+    log "Podman installed but no VM yet — run these when ready (interactive, ~1GB download):"
+    echo "     podman machine init"
+    echo "     podman machine start"
+    echo "   Or install podman-desktop (see setup-mac-apps.sh) for a GUI with auto-start."
   fi
 fi
 
