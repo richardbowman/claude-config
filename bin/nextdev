@@ -1,362 +1,412 @@
-#!/usr/bin/env bash
-# nextdev — scoped local dev-server manager.
-#
-# Each instance is keyed by its absolute cwd. Starting from a worktree
-# creates a distinct instance; commands only ever touch processes this
-# script started. Never uses pkill/killall/fuser/wildcard patterns.
-#
-# Commands:
-#   start    [--port N] [--pm npm|pnpm|yarn|bun] [--cmd "..."]
-#   stop     [--force]
-#   restart  [--port N] [--pm ...] [--cmd ...]
-#   status              # cwd instance only
-#   list                # every registered instance
-#   logs     [-f] [-n N]
-#   clean               # remove registrations whose pid is gone
-#   doctor              # show environment checks
-#
-# Runs on Linux, macOS, and WSL. Plain bash, no dependencies beyond
-# coreutils + pgrep.
+#!/usr/bin/env node
+// nextdev — scoped local dev-server manager.
+//
+// Each instance is keyed by its absolute cwd (resolved through symlinks,
+// so git worktrees get distinct identities). Commands only ever touch
+// processes this script started — never wildcard patterns.
+//
+// Commands:
+//   start    [--port N] [--pm npm|pnpm|yarn|bun] [--cmd "..."]
+//   stop     [--force]
+//   restart  [--port N] [--pm ...] [--cmd ...]
+//   status                # cwd instance only
+//   list                  # every registered instance
+//   logs     [-f] [-n N]
+//   clean                 # remove registrations whose pid is gone
+//   doctor                # environment checks
+//
+// Runs on Linux, macOS, and Windows (native or WSL). Zero npm deps —
+// Node stdlib only. Requires Node 18+.
 
-set -euo pipefail
+'use strict';
 
-VERSION=0.1.0
-STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/nextdev"
-mkdir -p "$STATE_ROOT"
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const net = require('node:net');
+const { spawn, spawnSync } = require('node:child_process');
 
-###############################################################################
-# Helpers
-###############################################################################
+const VERSION = '0.2.0';
+const IS_WIN = process.platform === 'win32';
 
-die() { echo "nextdev: $*" >&2; exit 1; }
-warn() { echo "nextdev: $*" >&2; }
+// ---------------------------------------------------------------------------
+// Paths + state
+// ---------------------------------------------------------------------------
 
-hash_path() {
-  if command -v sha1sum >/dev/null 2>&1; then
-    printf '%s' "$1" | sha1sum | cut -c1-12
-  elif command -v shasum >/dev/null 2>&1; then
-    printf '%s' "$1" | shasum | cut -c1-12
-  else
-    die "need sha1sum or shasum on PATH"
-  fi
+const STATE_ROOT = process.env.NEXTDEV_STATE_ROOT || path.join(
+  process.env.XDG_STATE_HOME
+    || (IS_WIN
+      ? (process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'))
+      : path.join(os.homedir(), '.local', 'state')),
+  'nextdev',
+);
+fs.mkdirSync(STATE_ROOT, { recursive: true });
+
+function die(msg, code = 1) {
+  process.stderr.write(`nextdev: ${msg}\n`);
+  process.exit(code);
+}
+function warn(msg) { process.stderr.write(`nextdev: ${msg}\n`); }
+
+function hashCwd(cwd) {
+  return crypto.createHash('sha1').update(cwd).digest('hex').slice(0, 12);
+}
+function instanceDir(cwd = process.cwd()) {
+  const abs = fs.realpathSync(cwd);
+  return path.join(STATE_ROOT, hashCwd(abs));
+}
+function readField(dir, name) {
+  try { return fs.readFileSync(path.join(dir, name), 'utf8').trim(); }
+  catch { return ''; }
+}
+function writeField(dir, name, value) {
+  fs.writeFileSync(path.join(dir, name), `${value}\n`);
 }
 
-instance_dir_for_cwd() {
-  printf '%s/%s' "$STATE_ROOT" "$(hash_path "$(pwd -P)")"
+// ---------------------------------------------------------------------------
+// Process helpers
+// ---------------------------------------------------------------------------
+
+function pidAlive(pid) {
+  if (!pid || Number.isNaN(pid)) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e.code === 'EPERM'; }
 }
 
-port_in_use() {
-  local p="$1"
-  if command -v ss >/dev/null 2>&1; then
-    ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${p}$"
-  elif command -v lsof >/dev/null 2>&1; then
-    lsof -iTCP:"$p" -sTCP:LISTEN -P -n >/dev/null 2>&1
-  elif command -v netstat >/dev/null 2>&1; then
-    netstat -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${p}$"
-  else
-    return 1
-  fi
+function pidCmdline(pid) {
+  if (IS_WIN) {
+    const r = spawnSync('powershell', [
+      '-NoProfile', '-Command',
+      `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`,
+    ], { encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : '';
+  }
+  const r = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : '';
 }
 
-find_free_port() {
-  local start="${1:-3000}" p
-  for (( p=start; p<start+200; p++ )); do
-    port_in_use "$p" || { echo "$p"; return 0; }
-  done
-  die "no free port found in ${start}-$((start+199))"
+function looksLikeDev(pid) {
+  if (!pidAlive(pid)) return false;
+  const args = pidCmdline(pid);
+  // Best-effort: if we can't read cmdline (permissions, rare), trust the pid file.
+  if (!args) return true;
+  return /\b(node|next|npm|pnpm|yarn|bun)\b/i.test(args);
 }
 
-# A pid is "ours" only if it still exists AND its command looks like node/next.
-verify_pid() {
-  local pid="$1"
-  [[ -n "$pid" ]] || return 1
-  kill -0 "$pid" 2>/dev/null || return 1
-  local args
-  args="$(ps -p "$pid" -o args= 2>/dev/null || true)"
-  [[ "$args" == *node* || "$args" == *next* || "$args" == *npm* || "$args" == *pnpm* || "$args" == *yarn* || "$args" == *bun* ]]
+function childrenOf(pid) {
+  if (IS_WIN) {
+    const r = spawnSync('powershell', [
+      '-NoProfile', '-Command',
+      `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | Select-Object -ExpandProperty ProcessId`,
+    ], { encoding: 'utf8' });
+    if (r.status !== 0) return [];
+    return r.stdout.split(/\r?\n/).map(s => s.trim()).filter(s => /^\d+$/.test(s)).map(Number);
+  }
+  const r = spawnSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' });
+  if (r.status !== 0) return [];
+  return r.stdout.trim().split('\n')
+    .map(l => l.trim().split(/\s+/))
+    .filter(([, ppid]) => Number(ppid) === pid)
+    .map(([p]) => Number(p));
 }
 
-detect_pm() {
-  if [[ -f pnpm-lock.yaml ]]; then echo pnpm
-  elif [[ -f yarn.lock ]]; then echo yarn
-  elif [[ -f bun.lockb || -f bun.lock ]]; then echo bun
-  elif [[ -f package.json ]]; then echo npm
-  else echo ""
-  fi
+function killTree(pid, sig = 'SIGTERM') {
+  if (!pid) return;
+  for (const c of childrenOf(pid)) killTree(c, sig);
+  try { process.kill(pid, sig); } catch { /* already gone */ }
 }
 
-pm_dev_cmd() {
-  case "$1" in
-    pnpm) echo "pnpm dev" ;;
-    yarn) echo "yarn dev" ;;
-    bun)  echo "bun run dev" ;;
-    npm)  echo "npm run dev" ;;
-    *)    echo "" ;;
-  esac
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function waitExit(pid, timeoutMs = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!pidAlive(pid)) return true;
+    await sleep(100);
+  }
+  return false;
 }
 
-stop_pid_tree() {
-  local pid="$1" sig="${2:-TERM}"
-  [[ -n "$pid" ]] || return 0
-  # Kill children first (so the parent doesn't respawn them)
-  local child
-  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-    stop_pid_tree "$child" "$sig"
-  done
-  kill -"$sig" "$pid" 2>/dev/null || true
+// ---------------------------------------------------------------------------
+// Port + package manager
+// ---------------------------------------------------------------------------
+
+function portInUse(port) {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', (e) => resolve(e.code === 'EADDRINUSE'));
+    s.once('listening', () => s.close(() => resolve(false)));
+    s.listen(Number(port), '127.0.0.1');
+  });
 }
 
-wait_for_exit() {
-  local pid="$1" timeout="${2:-10}" i
-  for (( i=0; i<timeout*10; i++ )); do
-    kill -0 "$pid" 2>/dev/null || return 0
-    sleep 0.1
-  done
-  return 1
+async function findFreePort(start = 3000) {
+  for (let p = start; p < start + 200; p++) {
+    if (!(await portInUse(p))) return p;
+  }
+  throw new Error(`no free port in ${start}-${start + 199}`);
 }
 
-read_field() {
-  local dir="$1" name="$2"
-  [[ -f "$dir/$name" ]] && cat "$dir/$name" || echo ""
+function detectPM(cwd) {
+  if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (fs.existsSync(path.join(cwd, 'yarn.lock')))      return 'yarn';
+  if (fs.existsSync(path.join(cwd, 'bun.lockb')) ||
+      fs.existsSync(path.join(cwd, 'bun.lock')))        return 'bun';
+  if (fs.existsSync(path.join(cwd, 'package.json')))   return 'npm';
+  return null;
 }
 
-###############################################################################
-# Commands
-###############################################################################
-
-cmd_start() {
-  local port="" pm="" cmd=""
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --port) port="$2"; shift 2 ;;
-      --pm)   pm="$2";   shift 2 ;;
-      --cmd)  cmd="$2";  shift 2 ;;
-      -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
-      *) die "unknown flag: $1" ;;
-    esac
-  done
-
-  [[ -f package.json ]] || die "no package.json in $(pwd -P)"
-
-  local dir
-  dir="$(instance_dir_for_cwd)"
-  mkdir -p "$dir"
-
-  if [[ -f "$dir/pid" ]]; then
-    local existing
-    existing="$(cat "$dir/pid")"
-    if verify_pid "$existing"; then
-      echo "Already running: pid=$existing port=$(read_field "$dir" port)"
-      echo "Use 'nextdev restart' to replace it."
-      exit 1
-    fi
-    rm -f "$dir/pid"
-  fi
-
-  if [[ -z "$cmd" ]]; then
-    [[ -z "$pm" ]] && pm="$(detect_pm)"
-    [[ -n "$pm" ]] || die "no package manager detected (no lockfile or package.json)"
-    cmd="$(pm_dev_cmd "$pm")"
-  fi
-
-  if [[ -z "$port" ]]; then
-    port="${PORT:-}"
-  fi
-  if [[ -z "$port" ]]; then
-    port="$(find_free_port 3000)"
-  elif port_in_use "$port"; then
-    die "port $port is already in use"
-  fi
-
-  local cwd
-  cwd="$(pwd -P)"
-  printf '%s\n' "$cwd"  > "$dir/cwd"
-  printf '%s\n' "$port" > "$dir/port"
-  printf '%s\n' "$cmd"  > "$dir/command"
-  date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/started_at"
-
-  if [[ -f "$dir/dev.log" ]]; then
-    mv "$dir/dev.log" "$dir/dev.log.prev"
-  fi
-
-  # Launch detached. Exporting PORT is the Next.js-standard way to set the
-  # listen port; --cmd override can also use it.
-  (
-    cd "$cwd"
-    PORT="$port" nohup bash -lc "$cmd" >"$dir/dev.log" 2>&1 &
-    echo $! > "$dir/pid"
-    disown || true
-  )
-
-  local pid
-  pid="$(cat "$dir/pid")"
-  sleep 0.2
-  if ! kill -0 "$pid" 2>/dev/null; then
-    warn "process exited immediately — check $dir/dev.log"
-    tail -n 20 "$dir/dev.log" >&2 || true
-    exit 1
-  fi
-
-  cat <<EOF
-Started ${cwd##*/} (nextdev)
-  pid:  $pid
-  port: $port
-  cmd:  $cmd
-  url:  http://localhost:$port
-  logs: $dir/dev.log
-EOF
+function pmDevCmd(pm) {
+  return ({
+    pnpm: ['pnpm', ['dev']],
+    yarn: ['yarn', ['dev']],
+    bun:  ['bun',  ['run', 'dev']],
+    npm:  ['npm',  ['run', 'dev']],
+  })[pm];
 }
 
-cmd_stop() {
-  local force=0
-  [[ "${1:-}" == "--force" ]] && force=1
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
 
-  local dir
-  dir="$(instance_dir_for_cwd)"
-  if [[ ! -f "$dir/pid" ]]; then
-    echo "Not running from $(pwd -P)"
-    return 0
-  fi
+async function cmdStart(argv) {
+  let port, pm, customCmd;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if      (a === '--port') port = argv[++i];
+    else if (a === '--pm')   pm = argv[++i];
+    else if (a === '--cmd')  customCmd = argv[++i];
+    else if (a === '-h' || a === '--help') { printHelp(); process.exit(0); }
+    else die(`unknown flag: ${a}`);
+  }
 
-  local pid
-  pid="$(cat "$dir/pid")"
+  const cwd = process.cwd();
+  if (!fs.existsSync(path.join(cwd, 'package.json'))) die(`no package.json in ${cwd}`);
 
-  if (( ! force )) && ! verify_pid "$pid"; then
-    warn "pid $pid no longer looks like node/next; refusing to kill"
-    warn "use 'nextdev stop --force' to override, or 'nextdev clean' to drop the registration"
-    return 1
-  fi
+  const dir = instanceDir(cwd);
+  fs.mkdirSync(dir, { recursive: true });
 
-  echo "Stopping pid=$pid (tree) ..."
-  stop_pid_tree "$pid" TERM
-  if ! wait_for_exit "$pid" 10; then
-    warn "did not exit on TERM; sending KILL"
-    stop_pid_tree "$pid" KILL
-    wait_for_exit "$pid" 5 || warn "pid $pid still alive"
-  fi
-  rm -f "$dir/pid"
-  echo "Stopped."
+  const existingPid = Number(readField(dir, 'pid'));
+  if (existingPid && looksLikeDev(existingPid)) {
+    console.log(`Already running: pid=${existingPid} port=${readField(dir, 'port')}`);
+    console.log(`Use 'nextdev restart' to replace it.`);
+    process.exit(1);
+  }
+  try { fs.unlinkSync(path.join(dir, 'pid')); } catch {}
+
+  let cmd, args, displayCmd;
+  if (customCmd) {
+    cmd = IS_WIN ? 'cmd.exe' : 'sh';
+    args = IS_WIN ? ['/d', '/s', '/c', customCmd] : ['-c', customCmd];
+    displayCmd = customCmd;
+  } else {
+    pm = pm || detectPM(cwd);
+    if (!pm) die('no package manager detected (need a lockfile or package.json)');
+    const got = pmDevCmd(pm);
+    if (!got) die(`unknown pm: ${pm}`);
+    [cmd, args] = got;
+    displayCmd = `${cmd} ${args.join(' ')}`;
+  }
+
+  if (!port) port = process.env.PORT;
+  if (!port) port = await findFreePort(3000);
+  else if (await portInUse(Number(port))) die(`port ${port} is already in use`);
+
+  writeField(dir, 'cwd', cwd);
+  writeField(dir, 'port', String(port));
+  writeField(dir, 'command', displayCmd);
+  writeField(dir, 'started_at', new Date().toISOString());
+
+  const logPath = path.join(dir, 'dev.log');
+  if (fs.existsSync(logPath)) fs.renameSync(logPath, path.join(dir, 'dev.log.prev'));
+  const logFd = fs.openSync(logPath, 'a');
+
+  const child = spawn(cmd, args, {
+    cwd,
+    env: { ...process.env, PORT: String(port) },
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+    shell: IS_WIN && !customCmd,  // pm binaries are .cmd on Windows
+    windowsHide: true,
+  });
+  child.unref();
+  fs.closeSync(logFd);
+  writeField(dir, 'pid', String(child.pid));
+
+  await sleep(200);
+  if (!pidAlive(child.pid)) {
+    warn(`process exited immediately — check ${logPath}`);
+    try {
+      const tail = fs.readFileSync(logPath, 'utf8').split('\n').slice(-20).join('\n');
+      process.stderr.write(tail + '\n');
+    } catch {}
+    process.exit(1);
+  }
+
+  console.log(`Started ${path.basename(cwd)} (nextdev)`);
+  console.log(`  pid:  ${child.pid}`);
+  console.log(`  port: ${port}`);
+  console.log(`  cmd:  ${displayCmd}`);
+  console.log(`  url:  http://localhost:${port}`);
+  console.log(`  logs: ${logPath}`);
 }
 
-cmd_restart() {
-  cmd_stop || true
-  cmd_start "$@"
+async function cmdStop(argv) {
+  const force = argv.includes('--force');
+  const dir = instanceDir();
+  const pid = Number(readField(dir, 'pid'));
+  if (!pid) { console.log(`Not running from ${process.cwd()}`); return; }
+
+  if (!force && !looksLikeDev(pid)) {
+    warn(`pid ${pid} no longer looks like node/next; refusing to kill`);
+    warn(`use 'nextdev stop --force' to override, or 'nextdev clean' to drop the registration`);
+    process.exit(1);
+  }
+
+  console.log(`Stopping pid=${pid} (tree) ...`);
+  killTree(pid, 'SIGTERM');
+  if (!(await waitExit(pid, 10000))) {
+    warn('did not exit on TERM; sending KILL');
+    killTree(pid, 'SIGKILL');
+    if (!(await waitExit(pid, 5000))) warn(`pid ${pid} still alive`);
+  }
+  try { fs.unlinkSync(path.join(dir, 'pid')); } catch {}
+  console.log('Stopped.');
 }
 
-cmd_status() {
-  local dir
-  dir="$(instance_dir_for_cwd)"
-  if [[ ! -d "$dir" ]]; then
-    echo "No instance registered for $(pwd -P)"
-    return 0
-  fi
-  local pid port cwd cmd started
-  pid="$(read_field "$dir" pid)"
-  port="$(read_field "$dir" port)"
-  cwd="$(read_field "$dir" cwd)"
-  cmd="$(read_field "$dir" command)"
-  started="$(read_field "$dir" started_at)"
-
-  local state="stopped"
-  if [[ -n "$pid" ]] && verify_pid "$pid"; then
-    state="running"
-  fi
-
-  cat <<EOF
-state:   $state
-cwd:     $cwd
-pid:     ${pid:-—}
-port:    ${port:-—}
-cmd:     ${cmd:-—}
-started: ${started:-—}
-logs:    $dir/dev.log
-EOF
+async function cmdRestart(argv) {
+  try { await cmdStop([]); } catch {}
+  await cmdStart(argv);
 }
 
-cmd_list() {
-  printf '%-10s  %-6s  %-6s  %s\n' "STATE" "PID" "PORT" "CWD"
-  local d
-  shopt -s nullglob
-  for d in "$STATE_ROOT"/*/; do
-    local pid port cwd state
-    pid="$(read_field "$d" pid)"
-    port="$(read_field "$d" port)"
-    cwd="$(read_field "$d" cwd)"
-    state="stopped"
-    if [[ -n "$pid" ]] && verify_pid "$pid"; then
-      state="running"
-    fi
-    printf '%-10s  %-6s  %-6s  %s\n' "$state" "${pid:--}" "${port:--}" "${cwd:-?}"
-  done
-  shopt -u nullglob
+function cmdStatus() {
+  const dir = instanceDir();
+  if (!fs.existsSync(dir)) {
+    console.log(`No instance registered for ${process.cwd()}`);
+    return;
+  }
+  const pid = Number(readField(dir, 'pid'));
+  const state = pid && looksLikeDev(pid) ? 'running' : 'stopped';
+  const rows = [
+    ['state',   state],
+    ['cwd',     readField(dir, 'cwd')],
+    ['pid',     pid || '—'],
+    ['port',    readField(dir, 'port') || '—'],
+    ['cmd',     readField(dir, 'command') || '—'],
+    ['started', readField(dir, 'started_at') || '—'],
+    ['logs',    path.join(dir, 'dev.log')],
+  ];
+  for (const [k, v] of rows) console.log(`${(k + ':').padEnd(9)} ${v}`);
 }
 
-cmd_logs() {
-  local follow=0 n=200
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -f) follow=1; shift ;;
-      -n) n="$2"; shift 2 ;;
-      *) die "unknown flag: $1" ;;
-    esac
-  done
-  local dir log
-  dir="$(instance_dir_for_cwd)"
-  log="$dir/dev.log"
-  [[ -f "$log" ]] || die "no logs at $log"
-  if (( follow )); then
-    tail -n "$n" -f "$log"
-  else
-    tail -n "$n" "$log"
-  fi
+function cmdList() {
+  const pad = (s, n) => String(s).padEnd(n);
+  console.log(`${pad('STATE', 10)}  ${pad('PID', 6)}  ${pad('PORT', 6)}  CWD`);
+  let entries = [];
+  try { entries = fs.readdirSync(STATE_ROOT).sort(); } catch { return; }
+  for (const name of entries) {
+    const d = path.join(STATE_ROOT, name);
+    let stat; try { stat = fs.statSync(d); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    const pid = Number(readField(d, 'pid'));
+    const state = pid && looksLikeDev(pid) ? 'running' : 'stopped';
+    console.log(`${pad(state, 10)}  ${pad(pid || '-', 6)}  ${pad(readField(d, 'port') || '-', 6)}  ${readField(d, 'cwd') || '?'}`);
+  }
 }
 
-cmd_clean() {
-  local d removed=0
-  shopt -s nullglob
-  for d in "$STATE_ROOT"/*/; do
-    local pid
-    pid="$(read_field "$d" pid)"
-    if [[ -z "$pid" ]] || ! verify_pid "$pid"; then
-      rm -rf "$d"
-      removed=$(( removed + 1 ))
-    fi
-  done
-  shopt -u nullglob
-  echo "Removed $removed stale registration(s)."
+function cmdLogs(argv) {
+  let follow = false, n = 200;
+  for (let i = 0; i < argv.length; i++) {
+    if      (argv[i] === '-f') follow = true;
+    else if (argv[i] === '-n') n = Number(argv[++i]);
+    else die(`unknown flag: ${argv[i]}`);
+  }
+  const logPath = path.join(instanceDir(), 'dev.log');
+  if (!fs.existsSync(logPath)) die(`no logs at ${logPath}`);
+
+  const content = fs.readFileSync(logPath, 'utf8');
+  const lines = content.split('\n');
+  process.stdout.write(lines.slice(-n - 1).join('\n'));
+
+  if (follow) {
+    let size = fs.statSync(logPath).size;
+    fs.watchFile(logPath, { interval: 200 }, (curr) => {
+      if (curr.size > size) {
+        fs.createReadStream(logPath, { start: size, end: curr.size })
+          .pipe(process.stdout, { end: false });
+        size = curr.size;
+      } else if (curr.size < size) {
+        size = 0;  // rotated
+      }
+    });
+  }
 }
 
-cmd_doctor() {
-  echo "nextdev $VERSION"
-  echo "state root: $STATE_ROOT"
-  echo "bash:       $BASH_VERSION"
-  command -v node   >/dev/null && echo "node:       $(node --version)"   || echo "node:       NOT FOUND"
-  command -v npm    >/dev/null && echo "npm:        $(npm --version)"    || true
-  command -v pnpm   >/dev/null && echo "pnpm:       $(pnpm --version)"   || true
-  command -v yarn   >/dev/null && echo "yarn:       $(yarn --version)"   || true
-  command -v bun    >/dev/null && echo "bun:        $(bun --version)"    || true
-  command -v pgrep  >/dev/null && echo "pgrep:      ok"                  || echo "pgrep:      NOT FOUND (required)"
-  command -v ss     >/dev/null && echo "port check: ss"
-  command -v lsof   >/dev/null && echo "port check: lsof"
-  command -v netstat>/dev/null && echo "port check: netstat"
+function cmdClean() {
+  let removed = 0;
+  let entries = [];
+  try { entries = fs.readdirSync(STATE_ROOT); } catch {}
+  for (const name of entries) {
+    const d = path.join(STATE_ROOT, name);
+    let stat; try { stat = fs.statSync(d); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    const pid = Number(readField(d, 'pid'));
+    if (!pid || !looksLikeDev(pid)) {
+      fs.rmSync(d, { recursive: true, force: true });
+      removed++;
+    }
+  }
+  console.log(`Removed ${removed} stale registration(s).`);
 }
 
-###############################################################################
-# Entry
-###############################################################################
+function cmdDoctor() {
+  console.log(`nextdev ${VERSION}`);
+  console.log(`state root: ${STATE_ROOT}`);
+  console.log(`platform:   ${process.platform} (${process.arch})`);
+  console.log(`node:       ${process.version}`);
+  for (const tool of ['npm', 'pnpm', 'yarn', 'bun']) {
+    const r = spawnSync(tool, ['--version'], { encoding: 'utf8', shell: IS_WIN });
+    if (r.status === 0) console.log(`${(tool + ':').padEnd(11)} ${r.stdout.trim()}`);
+  }
+}
 
-sub="${1:-}"
-shift || true
-case "$sub" in
-  start)   cmd_start "$@" ;;
-  stop)    cmd_stop "$@" ;;
-  restart) cmd_restart "$@" ;;
-  status)  cmd_status "$@" ;;
-  list|ls) cmd_list "$@" ;;
-  logs)    cmd_logs "$@" ;;
-  clean)   cmd_clean "$@" ;;
-  doctor)  cmd_doctor "$@" ;;
-  -v|--version) echo "nextdev $VERSION" ;;
-  -h|--help|"") grep '^#' "$0" | sed 's/^# \?//'; ;;
-  *) die "unknown command: $sub (try --help)" ;;
-esac
+function printHelp() {
+  const src = fs.readFileSync(__filename, 'utf8').split('\n');
+  const header = [];
+  for (const line of src) {
+    if (line.startsWith('#!')) continue;
+    if (!line.startsWith('//')) break;                     // top comment block only
+    header.push(line.replace(/^\/\/ ?/, ''));
+  }
+  process.stdout.write(header.join('\n').trimEnd() + '\n');
+}
+
+// ---------------------------------------------------------------------------
+// Entry
+// ---------------------------------------------------------------------------
+
+(async () => {
+  const [sub, ...rest] = process.argv.slice(2);
+  try {
+    switch (sub) {
+      case 'start':   await cmdStart(rest); break;
+      case 'stop':    await cmdStop(rest); break;
+      case 'restart': await cmdRestart(rest); break;
+      case 'status':  cmdStatus(); break;
+      case 'list':
+      case 'ls':      cmdList(); break;
+      case 'logs':    cmdLogs(rest); break;
+      case 'clean':   cmdClean(); break;
+      case 'doctor':  cmdDoctor(); break;
+      case '-v':
+      case '--version': console.log(`nextdev ${VERSION}`); break;
+      case undefined:
+      case '-h':
+      case '--help':  printHelp(); break;
+      default: die(`unknown command: ${sub} (try --help)`);
+    }
+  } catch (e) {
+    die(e && e.message ? e.message : String(e));
+  }
+})();

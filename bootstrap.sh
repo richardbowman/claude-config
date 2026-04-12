@@ -48,6 +48,9 @@ if [[ -d "$REPO_DIR/bin" ]]; then
     *":$HOME/.local/bin:"*) ;;
     *) echo "    note: add \$HOME/.local/bin to PATH in your shell rc" ;;
   esac
+  if ! command -v node >/dev/null 2>&1; then
+    echo "    note: bin/nextdev requires Node 18+ (install fnm or node to use it)"
+  fi
 fi
 
 echo "==> Linking repo-local skills"

@@ -142,10 +142,15 @@ Containers are great for **stateful deps** (Postgres, Redis) — see the `podman
 
 ## Cross-platform notes
 
-- **Linux, macOS, WSL**: `nextdev` runs as-is.
-- **Native Windows (PowerShell/cmd)**: use WSL2 for this script. Running Next dev directly on Windows works but `nextdev` is bash-only.
-- Port check uses `ss` on Linux, `lsof` on macOS, `netstat` as fallback.
-- Stopping uses a BFS of `pgrep -P` walking children before killing the parent, so dev servers spawned via `npm run dev` (npm → next-router-worker → render-workers) all come down cleanly.
+`nextdev` is a single Node.js script (Node 18+, zero npm deps — just stdlib). Runs on:
+
+- **Linux** — native.
+- **macOS** — native.
+- **Windows** — native PowerShell/cmd *or* WSL2. On Windows, process-tree walks use `Get-CimInstance Win32_Process`; on Linux/macOS, `ps -A -o pid=,ppid=`.
+- Port check uses `net.createServer().listen()` and catches `EADDRINUSE` — portable.
+- Stopping walks the child-pid tree via PowerShell/`ps` and kills leaves first, so dev servers spawned through `npm run dev` (npm → next-router-worker → render-workers) come down cleanly.
+
+State dir: `${XDG_STATE_HOME:-~/.local/state}/nextdev/` on Unix, `%LOCALAPPDATA%\nextdev\` on Windows. Override with `NEXTDEV_STATE_ROOT`.
 
 ## Env vars in worktrees
 
