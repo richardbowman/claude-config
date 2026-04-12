@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "plugins": {
+    "vercel-plugin@vercel": [
+      {
+        "scope": "user",
+        "installPath": "/home/rickbowman/.claude/plugins/cache/vercel/vercel-plugin/6e1917f9b805",
+        "version": "0.32.5",
+        "installedAt": "2026-04-11T13:38:03.558Z",
+        "lastUpdated": "2026-04-11T13:38:03.558Z",
+        "gitCommitSha": "6e1917f9b805d5f4df3a95ea1c601867e48677c4"
+      }
+    ]
+  }
+}
