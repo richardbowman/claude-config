@@ -45,6 +45,7 @@
       "Bash(gh:*)",
       "Bash(vercel:*)",
       "Bash(turbo:*)",
+      "Bash(nextdev:*)",
       "Read",
       "Edit",
       "Write",
