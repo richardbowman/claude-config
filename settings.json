@@ -58,5 +58,6 @@
   "enabledPlugins": {
     "vercel-plugin@vercel": true
   },
-  "model": "sonnet"
+  "model": "sonnet",
+  "autoMemoryDirectory": "~/.claude/memory"
 }
