@@ -36,6 +36,19 @@ link "$REPO_DIR/settings.json"                    "$CLAUDE_DIR/settings.json"
 link "$REPO_DIR/plugins/installed_plugins.json"   "$CLAUDE_DIR/plugins/installed_plugins.json"
 link "$REPO_DIR/plugins/known_marketplaces.json"  "$CLAUDE_DIR/plugins/known_marketplaces.json"
 
+echo "==> Linking repo-local bin"
+if [[ -d "$REPO_DIR/bin" ]]; then
+  mkdir -p "$HOME/.local/bin"
+  for bin_path in "$REPO_DIR/bin"/*; do
+    [[ -f "$bin_path" && -x "$bin_path" ]] || continue
+    link "$bin_path" "$HOME/.local/bin/$(basename "$bin_path")"
+  done
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) echo "    note: add \$HOME/.local/bin to PATH in your shell rc" ;;
+  esac
+fi
+
 echo "==> Linking repo-local skills"
 if [[ -d "$REPO_DIR/skills" ]]; then
   for skill_path in "$REPO_DIR/skills"/*/; do
