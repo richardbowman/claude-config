@@ -78,6 +78,55 @@ From Claude Code: start this as a background Bash command and use `BashOutput` /
 - `vercel` CLI installed (`npm i -g vercel`) and authenticated (`vercel login` or `VERCEL_TOKEN`).
 - Project linked (`vercel link`) or pass `--scope <team>` when outside a linked repo.
 
+## Monitoring a deployment until Ready (commit-pinned)
+
+Use this after `git push` to watch a specific commit's build reach Ready — not the next deployment that happens to show up at the top of `vercel ls`.
+
+### Key gotchas discovered in testing
+
+- **`vercel ls` table goes to stderr, not stdout** — always use `2>&1`, otherwise you only get bare URLs with no status column.
+- **`awk '{print $N}'` breaks on variable column widths** — use `grep -oE '(Ready|Building|Error)'` to extract the status word instead.
+- **Pinning to the commit SHA via the REST API** is the reliable approach for git-push-triggered deploys; `vercel inspect` does not expose the commit SHA in CLI output.
+
+### Recipe
+
+```bash
+# Read token from CLI auth store
+TOKEN=$(cat ~/.local/share/com.vercel.cli/auth.json | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+TEAM_ID="team_xxxx"       # from .vercel/project.json → orgId
+PROJECT_ID="prj_xxxx"     # from .vercel/project.json → projectId
+SHA=$(git rev-parse HEAD)
+
+# 1. Wait for Vercel to register the deployment for this commit
+while true; do
+  DEPLOY_URL=$(curl -s -H "Authorization: Bearer $TOKEN" \
+    "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=production&limit=5" \
+    | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for d in data['deployments']:
+  if d.get('meta', {}).get('githubCommitSha') == '$SHA':
+    print(d['url'])
+    break
+")
+  [[ -n "$DEPLOY_URL" ]] && break
+  echo "waiting for deployment to appear..."
+  sleep 10
+done
+
+# 2. Monitor that URL until Ready or Error
+while true; do
+  ROW=$(vercel ls 2>&1 | grep "$DEPLOY_URL")
+  STATUS=$(echo "$ROW" | grep -oE '(Ready|Building|Error)')
+  echo "$DEPLOY_URL — ${STATUS:-unknown}"
+  [[ "$STATUS" == "Ready" ]] && echo "READY — deployment live" && exit 0
+  [[ "$STATUS" == "Error" ]] && echo "BUILD FAILED" && exit 1
+  sleep 15
+done
+```
+
+Run step 2 via the `Monitor` tool so notifications land in the chat automatically.
+
 ## When not to use this
 
 - Very old deployments may have logs outside the retention window — Vercel's Observability / log drains persist longer. If `vercel logs --no-follow` returns empty for a known-failed deploy, check the dashboard or any configured log drain (Datadog, Axiom, etc.).
