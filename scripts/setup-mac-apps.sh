@@ -10,6 +10,7 @@
 #   - obsidian            notes
 #   - 1password           password manager
 #   - ghostty             terminal
+#   - handy               offline speech-to-text (push-to-talk dictation)
 #   - podman-desktop      tray app; auto-starts the podman machine at login
 #   - cmux                Ghostty-based terminal for AI coding agents
 #                         (requires 3rd-party tap: manaflow-ai/cmux)
@@ -36,7 +37,7 @@ brew_cask() {
 
 # Main-repo casks — installed one at a time so the user can see progress
 log "Standard casks"
-for c in google-chrome visual-studio-code obsidian 1password ghostty podman-desktop; do
+for c in google-chrome visual-studio-code obsidian 1password ghostty handy podman-desktop; do
   brew_cask "$c"
 done
 
