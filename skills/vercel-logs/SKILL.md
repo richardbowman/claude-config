@@ -90,25 +90,27 @@ Use this after `git push` to watch a specific commit's build reach Ready — not
 
 ### Recipe
 
+Run from the linked project root — reads `TEAM_ID` and `PROJECT_ID` directly from `.vercel/project.json` so there's nothing to edit.
+
 ```bash
-# Read token from CLI auth store
-TOKEN=$(cat ~/.local/share/com.vercel.cli/auth.json | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
-TEAM_ID="team_xxxx"       # from .vercel/project.json → orgId
-PROJECT_ID="prj_xxxx"     # from .vercel/project.json → projectId
+# IDs from the linked project (run `vercel link` once if missing)
+TEAM_ID=$(jq -r .orgId     .vercel/project.json)
+PROJECT_ID=$(jq -r .projectId .vercel/project.json)
 SHA=$(git rev-parse HEAD)
+
+# Token: simplest is the env var; fall back to the CLI auth store.
+#   Linux:   ~/.local/share/com.vercel.cli/auth.json
+#   macOS:   ~/Library/Application\ Support/com.vercel.cli/auth.json
+#   Windows: %APPDATA%\com.vercel.cli\auth.json
+TOKEN="${VERCEL_TOKEN:-$(jq -r .token ~/.local/share/com.vercel.cli/auth.json 2>/dev/null)}"
+[[ -n "$TOKEN" ]] || { echo "no vercel token — set VERCEL_TOKEN or run 'vercel login'"; exit 1; }
 
 # 1. Wait for Vercel to register the deployment for this commit
 while true; do
   DEPLOY_URL=$(curl -s -H "Authorization: Bearer $TOKEN" \
     "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=production&limit=5" \
-    | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for d in data['deployments']:
-  if d.get('meta', {}).get('githubCommitSha') == '$SHA':
-    print(d['url'])
-    break
-")
+    | jq -r --arg sha "$SHA" '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' \
+    | head -1)
   [[ -n "$DEPLOY_URL" ]] && break
   echo "waiting for deployment to appear..."
   sleep 10
