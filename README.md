@@ -31,15 +31,19 @@ Personal Claude Code configuration synced across machines.
 
 ### macOS — one-shot
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/richardbowman/claude-config/main/scripts/setup-mac.sh | bash
-```
-
-Or clone first and run locally (same effect, more inspectable):
+**Recommended: clone first.** Homebrew's installer needs an interactive TTY to prompt for your password (piped `curl | bash` can't give it one, which surfaces as misleading "not an administrator" errors):
 
 ```sh
+xcode-select --install   # if not already installed
 git clone https://github.com/richardbowman/claude-config.git ~/claude-config
 ~/claude-config/scripts/setup-mac.sh
+~/claude-config/scripts/setup-mac-apps.sh   # optional: personal apps
+```
+
+One-liner (the script now detects piped-stdin and reattaches to `/dev/tty` when possible):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/richardbowman/claude-config/main/scripts/setup-mac.sh | bash
 ```
 
 Installs Xcode CLI tools, Homebrew, git, fnm + Node LTS, Claude Code, gh, podman, Vercel CLI, and runs `bootstrap.sh`. Idempotent — safe to re-run.

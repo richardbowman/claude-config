@@ -25,6 +25,33 @@ set -euo pipefail
 log() { printf '\n==> %s\n' "$*"; }
 exists() { command -v "$1" >/dev/null 2>&1; }
 
+# Homebrew's installer prompts for your password via sudo. If this script
+# was run via `curl ... | bash`, stdin is the pipe (not a TTY) and sudo
+# fails with misleading "not an administrator"-style errors. Reattach
+# stdin to the user's terminal if possible; otherwise error clearly.
+if [[ ! -t 0 ]]; then
+  if [[ -r /dev/tty ]]; then
+    exec < /dev/tty
+  else
+    cat >&2 <<'EOF'
+This script needs an interactive terminal so Homebrew can prompt for
+your password via sudo. Running via `curl | bash` doesn't give it one,
+and you'll see misleading "not an administrator" errors.
+
+Either:
+  1) Download the script first, then run it:
+       curl -fsSL https://raw.githubusercontent.com/richardbowman/claude-config/main/scripts/setup-mac.sh -o /tmp/setup-mac.sh
+       bash /tmp/setup-mac.sh
+
+  2) Clone the repo first, then run from disk:
+       xcode-select --install   # if not already installed
+       git clone https://github.com/richardbowman/claude-config.git ~/claude-config
+       ~/claude-config/scripts/setup-mac.sh
+EOF
+    exit 1
+  fi
+fi
+
 REPO_URL="${REPO_URL:-https://github.com/richardbowman/claude-config.git}"
 REPO_DIR="${REPO_DIR:-$HOME/claude-config}"
 
