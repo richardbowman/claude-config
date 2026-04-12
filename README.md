@@ -5,10 +5,23 @@ Personal Claude Code configuration synced across machines.
 ## What's in here
 
 - `settings.json` — permissions allow-list, enabled plugins, model preference
-- `plugins/installed_plugins.json` — plugin installation manifest
 - `plugins/known_marketplaces.json` — registered plugin marketplaces
-- `skills.txt` — third-party skills to install (one per line, `#` for comments)
-- `bootstrap.sh` — symlinks this repo into `~/.claude/` and installs missing skills
+- `skills/` — hand-authored skills (see below)
+- `skills.txt` — third-party skills to install via `npx skills add`
+- `bin/` — CLIs added to `~/.local/bin` on bootstrap
+- `bootstrap.sh` — symlinks this repo into `~/.claude/` and `~/.local/bin/`, installs missing third-party skills
+
+## Included skills
+
+| Skill | Purpose |
+|---|---|
+| `nextjs-local-dev` | Run/monitor Next.js dev servers via the `nextdev` CLI. Per-worktree isolation, safe stop/restart, env-var recipes for worktrees. |
+| `podman-postgres` | Local Postgres via Podman — cross-platform, named volumes, backup/restore, upgrades. |
+| `vercel-logs` | Pull historical Vercel deployment logs; commit-pinned deploy monitoring. |
+
+## Included CLIs
+
+- **`nextdev`** — scoped Next.js dev-server manager. Start/stop/restart/list servers by worktree, logs, doctor. Safely avoids wildcard process kills. See `skills/nextjs-local-dev/SKILL.md` for full reference.
 
 ## Setup on a new machine
 
@@ -17,7 +30,9 @@ git clone git@github.com:<user>/claude-config.git ~/claude-config
 ~/claude-config/bootstrap.sh
 ```
 
-The script symlinks files from this repo into `~/.claude/`, so any later edits in either location stay in sync. Existing non-symlink files at the target are backed up to `*.backup.<timestamp>`.
+The script symlinks files from this repo into `~/.claude/` (settings, marketplaces, skills) and into `~/.local/bin/` (CLIs), so later edits in either location stay in sync. Existing non-symlink files at the target are backed up to `*.backup.<timestamp>`.
+
+Make sure `~/.local/bin` is on your `PATH` (add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` if not).
 
 ## Machine-specific overrides
 
