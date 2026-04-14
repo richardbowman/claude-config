@@ -89,6 +89,17 @@ if (fs.existsSync(skillsSrc)) {
   }
 }
 
+const rulesSrc = path.join(REPO, 'rules');
+if (fs.existsSync(rulesSrc)) {
+  console.log('==> Linking rules');
+  fs.mkdirSync(path.join(CLAUDE, 'rules'), { recursive: true });
+  for (const name of fs.readdirSync(rulesSrc)) {
+    const src = path.join(rulesSrc, name);
+    if (!fs.statSync(src).isFile()) continue;
+    link(src, path.join(CLAUDE, 'rules', name));
+  }
+}
+
 const skillsTxt = path.join(REPO, 'skills.txt');
 if (fs.existsSync(skillsTxt)) {
   console.log('==> Checking third-party skills');
