@@ -8,6 +8,7 @@ Personal Claude Code configuration synced across machines.
 - `plugins/known_marketplaces.json` — registered plugin marketplaces
 - `skills/` — hand-authored skills (see below)
 - `skills.txt` — third-party skills to install via `npx skills add`
+- `rules/` — custom CLAUDE.md-style rules synced to `~/.claude/rules/` (e.g., context7.md)
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
 - `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
 - `bootstrap.js` — does the real work: symlinks this repo into `~/.claude/` and `~/.local/bin/`, installs missing third-party skills

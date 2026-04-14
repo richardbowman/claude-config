@@ -1,1 +1,10 @@
 find-skills
+find-docs
+agent-browser
+remotion-best-practices
+gws-calendar
+gws-docs
+gws-docs-write
+gws-drive
+gws-gmail
+gws-sheets
