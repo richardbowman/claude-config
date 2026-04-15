@@ -11,7 +11,9 @@
 #   - 1password                 password manager
 #   - ghostty                   terminal
 #   - handy                     offline speech-to-text (push-to-talk dictation)
+#   - claude                    Claude AI desktop app (GUI companion to claude-code CLI)
 #   - podman-desktop            tray app; auto-starts the podman machine at login
+#   - alt-tab                   Windows-style alt-tab switcher
 #   - cmux                      Ghostty-based terminal for AI coding agents
 #                               (requires 3rd-party tap: manaflow-ai/cmux)
 # Fonts:
@@ -39,7 +41,7 @@ brew_cask() {
 
 # Main-repo casks — installed one at a time so the user can see progress
 log "Standard casks"
-for c in google-chrome visual-studio-code obsidian 1password ghostty handy podman-desktop; do
+for c in google-chrome visual-studio-code obsidian 1password ghostty handy claude podman-desktop alt-tab; do
   brew_cask "$c"
 done
 
