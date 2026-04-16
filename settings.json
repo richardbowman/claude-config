@@ -1,4 +1,8 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "bash /Users/rickbowman/.claude/statusline-command.sh"
+  },
   "permissions": {
     "allow": [
       "Bash",
@@ -56,8 +60,9 @@
       "WebFetch"
     ]
   },
-  "enabledPlugins": {
-    "vercel-plugin@vercel": true
-  },
-  "model": "sonnet"
+  "model": "sonnet",
+"enabledPlugins": {
+    "vercel-plugin@vercel": true,
+    "vercel@claude-plugins-official": true
+  }
 }

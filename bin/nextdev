@@ -142,7 +142,18 @@ function portInUse(port) {
 }
 
 async function findFreePort(start = 3000) {
+  // Skip ports already claimed by other live nextdev instances to avoid races
+  const claimed = new Set();
+  try {
+    for (const name of fs.readdirSync(STATE_ROOT)) {
+      const d = path.join(STATE_ROOT, name);
+      const pid = Number(readField(d, 'pid'));
+      const port = Number(readField(d, 'port'));
+      if (pid && port && looksLikeDev(pid)) claimed.add(port);
+    }
+  } catch {}
   for (let p = start; p < start + 200; p++) {
+    if (claimed.has(p)) continue;
     if (!(await portInUse(p))) return p;
   }
   throw new Error(`no free port in ${start}-${start + 199}`);
@@ -209,7 +220,6 @@ async function cmdStart(argv) {
     displayCmd = `${cmd} ${args.join(' ')}`;
   }
 
-  if (!port) port = process.env.PORT;
   if (!port) port = await findFreePort(3000);
   else if (await portInUse(Number(port))) die(`port ${port} is already in use`);
 

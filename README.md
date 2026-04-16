@@ -23,6 +23,17 @@ Personal Claude Code configuration synced across machines.
 | `verify-before-coding` | Forces Claude to verify APIs/flags before writing code in fast-moving ecosystems (Vercel, Next.js, AI SDK, Node tooling). |
 | `worktree-bootstrap` | Prep a git worktree for local Next.js dev when the project uses Vercel/DSQL — installs deps, copies .env.local, starts Podman Postgres, injects DATABASE_URL, launches nextdev. |
 
+**Third-party skills** (installed via `npx skills add`, listed in `skills.txt`):
+
+| Skill | Purpose |
+|---|---|
+| `find-skills` | Discover and search available skills in the marketplace. |
+| `defuddle` | Parse and extract clean content from web pages. |
+| `json-canvas` | Create and edit Obsidian JSON Canvas files. |
+| `obsidian-bases` | Work with Obsidian Bases (database views). |
+| `obsidian-cli` | Control Obsidian via CLI commands. |
+| `obsidian-markdown` | Obsidian-flavored Markdown — callouts, embeds, properties. |
+
 ## Included CLIs
 
 - **`nextdev`** — scoped Next.js dev-server manager. Start/stop/restart/list servers by worktree, logs, doctor. Safely avoids wildcard process kills. See `skills/nextjs-local-dev/SKILL.md` for full reference.
@@ -48,6 +59,25 @@ curl -fsSL https://raw.githubusercontent.com/richardbowman/claude-config/main/sc
 ```
 
 Installs Xcode CLI tools, Homebrew, git, fnm + Node LTS, Claude Code, gh, podman, Vercel CLI, and runs `bootstrap.sh`. Idempotent — safe to re-run.
+
+**After the script finishes** (interactive steps, one-time per machine):
+
+```sh
+exec zsh -l          # login shell — sources .zprofile so brew, fnm, etc. resolve
+claude               # first run prompts login
+gh auth login        # authenticate GitHub CLI
+vercel login         # authenticate Vercel CLI
+podman machine init  # ~1GB download — skip if podman-desktop will manage this
+podman machine start
+```
+
+**Verify everything wired up:**
+
+```sh
+ls -la ~/.claude/settings.json            # should be a symlink -> ~/claude-config/settings.json
+ls ~/.claude/skills/                      # should list all synced skills
+nextdev doctor                            # should report node + brew-installed tools
+```
 
 ### Linux / manual
 
@@ -77,6 +107,17 @@ eval "$(fnm env --use-on-cd)"
 The script symlinks files from this repo into `~/.claude/` (settings, marketplaces, skills) and into `~/.local/bin/` (CLIs), so later edits in either location stay in sync. Existing non-symlink files at the target are backed up to `*.backup.<timestamp>`.
 
 Make sure `~/.local/bin` is on your `PATH` (add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` if not).
+
+## Status line
+
+The status line is configured in `settings.json` to run `~/.claude/statusline-command.sh` (symlinked from this repo via `bootstrap.sh`).
+
+It shows:
+- **nextdev URL** — dynamically looks up the running `nextdev` port for the current workspace (e.g. `http://localhost:3001`). Hidden if no server is running.
+- **Git branch** — current branch name.
+- **PR number** — if a GitHub PR exists for the branch (via `gh`), appended as `PR #123`.
+
+The script hashes the workspace's absolute path with SHA1 to find the right `nextdev` state dir under `~/.local/state/nextdev/`, so it correctly tracks per-worktree servers.
 
 ## Machine-specific overrides
 

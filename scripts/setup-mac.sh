@@ -11,9 +11,10 @@
 #   4. Node LTS via fnm
 #   5. Claude Code (Homebrew cask — auto-updates via `brew upgrade`)
 #   6. Vercel CLI (npm)
-#   7. Clone claude-config repo if missing, then bootstrap
-#   8. Write ~/.claude/settings.local.json with Mac-appropriate paths
-#   9. Ensure ~/.local/bin is on PATH in ~/.zshrc
+#   7. Gemini CLI (Homebrew formula)
+#   8. Clone claude-config repo if missing, then bootstrap
+#   9. Write ~/.claude/settings.local.json with Mac-appropriate paths
+#  10. Ensure ~/.local/bin is on PATH in ~/.zshrc
 #
 # Interactive steps you'll run after:
 #   - claude           (first run prompts login)
@@ -116,8 +117,8 @@ done
 # ---------------------------------------------------------------------------
 # 3. Core brews
 # ---------------------------------------------------------------------------
-log "Core brews: git, fnm, gh, podman"
-for f in git fnm gh podman; do
+log "Core brews: git, fnm, gh, podman, googleworkspace-cli"
+for f in git fnm gh podman googleworkspace-cli; do
   brew_formula "$f"
 done
 
@@ -153,7 +154,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Vercel CLI (npm)
+# 6. Google Cloud SDK (Homebrew cask)
+# ---------------------------------------------------------------------------
+if exists gcloud; then
+  ok "Google Cloud SDK already installed ($(gcloud --version 2>/dev/null | head -1 || echo 'present'))"
+else
+  brew_cask google-cloud-sdk
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Vercel CLI (npm)
 # ---------------------------------------------------------------------------
 if exists vercel; then
   ok "Vercel CLI already installed ($(vercel --version 2>/dev/null | head -1 || echo 'present'))"
@@ -163,7 +173,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Clone + bootstrap
+# 8. Gemini CLI (Homebrew formula)
+# ---------------------------------------------------------------------------
+if exists gemini; then
+  ok "Gemini CLI already installed ($(gemini --version 2>/dev/null || echo 'present'))"
+else
+  brew_formula gemini-cli
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Clone + bootstrap
 # ---------------------------------------------------------------------------
 if [[ ! -d "$REPO_DIR" ]]; then
   log "Cloning $REPO_URL -> $REPO_DIR"
@@ -174,7 +193,7 @@ log "Running claude-config bootstrap"
 "$REPO_DIR/bootstrap.sh"
 
 # ---------------------------------------------------------------------------
-# 8. settings.local.json for Mac paths
+# 10. settings.local.json for Mac paths
 # ---------------------------------------------------------------------------
 LOCAL_SETTINGS="$HOME/.claude/settings.local.json"
 if [[ ! -f "$LOCAL_SETTINGS" ]]; then
@@ -191,7 +210,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Podman VM — start if already initialized, otherwise print instructions
+# 11. Podman VM — start if already initialized, otherwise print instructions
 # ---------------------------------------------------------------------------
 # `podman machine init` pulls a ~1GB Fedora CoreOS image and some versions
 # prompt for provider/resources. Both of those behave badly inside a
@@ -212,7 +231,7 @@ if exists podman; then
 fi
 
 # ---------------------------------------------------------------------------
-# 10. ~/.local/bin on PATH
+# 12. ~/.local/bin on PATH
 # ---------------------------------------------------------------------------
 if ! grep -q '.local/bin' "$HOME/.zshrc" 2>/dev/null; then
   log "Adding ~/.local/bin to PATH in ~/.zshrc"
@@ -230,6 +249,8 @@ cat <<'EOF'
   claude                             # first run prompts login
   gh auth login                      # authenticate GitHub CLI
   vercel login                       # authenticate Vercel CLI
+  gcloud init                        # authenticate Google Cloud CLI
+  gws auth setup                     # authenticate Google Workspace CLI
   # (Podman VM was initialized + started automatically above.)
 
 Verify:

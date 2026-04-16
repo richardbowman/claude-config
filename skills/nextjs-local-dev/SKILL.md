@@ -156,6 +156,8 @@ State dir: `${XDG_STATE_HOME:-~/.local/state}/nextdev/` on Unix, `%LOCALAPPDATA%
 
 Worktrees do **not** inherit `.env.local` from the main checkout, and they don't have their own `.vercel/project.json` — the Vercel link only exists in the main repo. If the dev server throws auth or missing-secret errors after `nextdev start`, pull env vars like this:
 
+> **Tip:** Some projects have credential chains (cloud auth providers, custom secret managers) where a plain `vercel env pull` is not sufficient. If the project has a `worktree-bootstrap` skill available, invoke it before `nextdev start` when working in a fresh worktree — it handles any project-specific env setup that the standard pull can't cover.
+
 ```sh
 # 1. Find where the Vercel link lives
 find ~/projects/<repo> -name "project.json" -path "*/.vercel/*"

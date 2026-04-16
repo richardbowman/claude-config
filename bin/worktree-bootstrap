@@ -147,7 +147,12 @@ if (!hasCmd('podman')) {
 
 log('starting dev server via nextdev');
 const devEnv = { ...process.env };
-if (pgUrl) devEnv.DATABASE_URL = pgUrl;
+if (pgUrl) {
+  devEnv.DATABASE_URL = pgUrl;
+  // PGSSLMODE=require (copied from main .env.local for DSQL) breaks pg when
+  // connecting to a local Postgres that doesn't support TLS — override it.
+  devEnv.PGSSLMODE = 'disable';
+}
 
 const r = spawnSync('nextdev', ['start'], {
   cwd: toplevel,
@@ -174,6 +179,7 @@ setTimeout(() => {
       [/MissingSecret|NEXTAUTH_SECRET/i,            'auth secret missing'],
       [/OIDC|unauthorized.*dsql|token.*expired/i,   'DSQL/OIDC auth failing (DATABASE_URL not overriding?)'],
       [/ECONNREFUSED.*5432/i,                       'postgres not reachable at 5432'],
+      [/does not support SSL|TLS.*connection/i,     'SSL mismatch — PGSSLMODE=require against local postgres (re-run bootstrap to fix)'],
       [/PrismaClient.*connect/i,                    'Prisma client failed to connect'],
     ];
     const hits = flags.filter(([re]) => re.test(txt));
