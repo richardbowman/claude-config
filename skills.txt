@@ -1,5 +1,5 @@
 find-skills
-awslabs/mcp --skill dsql
+awslabs/mcp --skill dsql --yes
 agent-browser
 remotion-best-practices
 https://github.com/kepano/obsidian-skills.git
