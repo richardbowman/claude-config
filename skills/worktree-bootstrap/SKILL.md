@@ -28,7 +28,7 @@ One command, idempotent. Re-running is safe — install and .env.local copy both
 2. **Install deps** — detects package manager from lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock*`, else `package.json`+`npm ci`) and runs a frozen-lockfile install. Skipped if `node_modules/` already exists.
 3. **Copy `.env.local`** from `<mainRepo>/.env.local` to `<worktree>/.env.local`. Skipped if the worktree already has one.
 4. **Start Podman Postgres** — finds a container matching `*-pg` whose image name contains `postgres|pgvector|postgis`. If multiple, prefers one whose name matches the main repo's basename. `podman start` if stopped.
-5. **Derive `DATABASE_URL`** from the container's env (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) and port mapping — `postgres://<user>:<pass>@localhost:<hostPort>/<db>`. No hardcoded values.
+5. **Derive `DATABASE_URL`** from the container's env (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) and port mapping — `postgres://<user>:<pass>@localhost:<hostPort>/<db>?sslmode=disable`. The `sslmode=disable` suffix is always appended — local Podman Postgres containers don't have SSL configured and Prisma will throw "The server does not support SSL connections" without it.
 6. **Launch `nextdev start`** with the derived `DATABASE_URL` in `process.env`. This overrides whatever the copied `.env.local` had (which would be the DSQL URL from `vercel env pull`), so `prisma.config.ts` sees the local connection string and skips the DSQL token provider.
 7. **Scan the dev log** after 3s for common failure patterns (`MissingSecret`, `OIDC`/`token expired`, `ECONNREFUSED :5432`, Prisma connect errors) and flag them.
 
@@ -90,7 +90,7 @@ cp ../main-repo/.env.local .
 podman start myproject-pg
 
 # dev server with override
-DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject" nextdev start
+DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject?sslmode=disable" nextdev start
 ```
 
 ## Not covered

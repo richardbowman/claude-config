@@ -19,6 +19,7 @@ for (const d of [
   CLAUDE,
   path.join(CLAUDE, 'plugins'),
   path.join(CLAUDE, 'skills'),
+  path.join(CLAUDE, 'rules'),
   SKILLS_BASE,
   LOCAL_BIN,
 ]) {
