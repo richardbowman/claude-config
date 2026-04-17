@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/home/rickbowman/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-04-16T11:07:54.901Z"
+    "lastUpdated": "2026-04-17T12:06:59.522Z"
   },
   "vercel": {
     "source": {
@@ -13,6 +13,6 @@
       "repo": "vercel/vercel-plugin"
     },
     "installLocation": "/home/rickbowman/.claude/plugins/marketplaces/vercel",
-    "lastUpdated": "2026-04-16T11:07:30.665Z"
+    "lastUpdated": "2026-04-17T12:05:48.653Z"
   }
 }
