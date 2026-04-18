@@ -19,6 +19,10 @@ for script in "$BIN_SRC"/*; do
   echo "  linked $target -> $script"
 done
 
+# --- Homebrew packages ---
+brew install --quiet 1password-cli 2>/dev/null || true
+echo "  installed 1password-cli"
+
 # --- Claude Code settings -> ~/.claude/settings.json ---
 CLAUDE_DIR="$HOME/.claude"
 mkdir -p "$CLAUDE_DIR"
