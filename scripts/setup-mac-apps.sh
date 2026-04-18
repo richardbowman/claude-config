@@ -17,6 +17,7 @@
 #   - alt-tab                   Windows-style alt-tab switcher
 #   - cmux                      Ghostty-based terminal for AI coding agents
 #                               (requires 3rd-party tap: manaflow-ai/cmux)
+#   - google-drive              Google Drive for Desktop (file sync)
 # Fonts:
 #   - font-source-code-pro      Adobe's Source Code Pro (programmer font)
 set -euo pipefail
@@ -48,7 +49,7 @@ brew_cask() {
 }
 
 # Standard apps — installed on all machines
-apps_standard=(visual-studio-code ghostty handy claude podman-desktop keepingyouawake alt-tab)
+apps_standard=(visual-studio-code ghostty handy claude podman-desktop keepingyouawake alt-tab google-drive)
 
 # Personal apps — skipped on work machines
 apps_personal=(google-chrome obsidian 1password)
