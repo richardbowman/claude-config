@@ -39,7 +39,8 @@
       "Bash(bun:*)",
       "Bash(gh:*)",
       "Bash(vercel:*)",
-      "WebFetch"
+      "WebFetch",
+      "WebSearch"
     ]
   },
   "model": "sonnet",
