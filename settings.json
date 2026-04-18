@@ -21,6 +21,7 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(wc:*)",
+      "Bash(lsof:*)",
       "Bash(curl:*)",
       "Bash(node:*)",
       "Bash(openssl:*)",
