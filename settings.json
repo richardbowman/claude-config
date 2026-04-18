@@ -57,6 +57,7 @@
   "model": "sonnet",
 "enabledPlugins": {
     "vercel-plugin@vercel": true,
+    "vercel-cli@vercel": true,
     "vercel@claude-plugins-official": true
   }
 }
