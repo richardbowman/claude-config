@@ -23,6 +23,7 @@
       "Bash(sort:*)",
       "Bash(uniq:*)",
       "Bash(jq:*)",
+      "Bash(brew:*)",
       "Bash(npm:*)",
       "Bash(npx:*)",
       "Bash(nextdev:*)",
