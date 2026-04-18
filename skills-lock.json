@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "0ed68bc3e818ba0e6b8d192357ea3daaf552a3893f8854e7fd43c06831f91323"
     },
+    "dsql": {
+      "source": "awslabs/mcp",
+      "sourceType": "github",
+      "computedHash": "73ac8df5ac218767580b18ab4486dc1bbd8c8c0d9bcb4d46363ff859269f4c8e"
+    },
     "gws-admin-reports": {
       "source": "googleworkspace/cli",
       "sourceType": "github",
