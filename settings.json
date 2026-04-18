@@ -27,6 +27,11 @@
       "Bash(npm:*)",
       "Bash(npx:*)",
       "Bash(nextdev:*)",
+      "Bash(worktree-bootstrap:*)",
+      "Bash(podman:*)",
+      "Bash(pnpm:*)",
+      "Bash(yarn:*)",
+      "Bash(bun:*)",
       "Bash(gh:*)",
       "Bash(vercel:*)",
       "WebFetch"
