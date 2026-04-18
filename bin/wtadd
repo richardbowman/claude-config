@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# wtadd — safe git worktree creation: fetch + fast-forward main first,
+# then create the worktree. Prevents branching off a stale base.
+# Usage: wtadd <path> [<branch>] [extra git worktree add args]
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  echo "Usage: wtadd <path> [<branch>] [extra git worktree add args]" >&2
+  exit 1
+fi
+
+wt-ff-main || exit 1
+git worktree add "$@"

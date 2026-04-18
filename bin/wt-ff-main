@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# wt-ff-main — fetch origin and fast-forward local main if behind.
+# Used by wtadd and wtcc. Exits non-zero on failure with a clear message.
+
+set -euo pipefail
+
+echo "==> fetching origin..." && git fetch origin || exit 1
+
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+default_branch=${default_branch:-main}
+
+behind=$(git rev-list "HEAD..origin/${default_branch}" --count 2>/dev/null)
+if [ "${behind:-0}" -gt 0 ]; then
+  echo "==> fast-forwarding ${behind} commit(s) from origin/${default_branch}..."
+  merge_out=$(git merge --ff-only "origin/${default_branch}" 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "$merge_out" >&2
+    if echo "$merge_out" | grep -q "untracked working tree files"; then
+      echo "" >&2
+      echo "!! blocked by untracked files — remove them and retry, e.g.:" >&2
+      echo "$merge_out" | grep -E '^\s+\S' | sed 's/^[[:space:]]*/    rm /' >&2
+    else
+      echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+    fi
+    exit 1
+  fi
+else
+  echo "==> local ${default_branch} is up to date"
+fi
