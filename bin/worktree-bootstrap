@@ -49,6 +49,37 @@ log(`worktree: ${toplevel}`);
 log(`main:     ${mainRepo}`);
 
 // ---------------------------------------------------------------------------
+// 1b. Staleness check — warn if worktree base is behind origin/main
+// ---------------------------------------------------------------------------
+
+function gitIn(dir, args) {
+  return spawnSync('git', args, { encoding: 'utf8', cwd: dir });
+}
+
+// Fetch quietly so we have up-to-date remote refs to compare against
+gitIn(mainRepo, ['fetch', 'origin', '--quiet']);
+
+// Find the default branch name (main or master)
+const defaultBranchRes = gitIn(mainRepo, ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+const defaultBranch = defaultBranchRes.status === 0
+  ? defaultBranchRes.stdout.trim().replace('refs/remotes/', '')  // e.g. "origin/main"
+  : 'origin/main';
+
+const behindRes = gitIn(toplevel, ['rev-list', `HEAD..${defaultBranch}`, '--count']);
+if (behindRes.status === 0) {
+  const behind = parseInt(behindRes.stdout.trim(), 10);
+  if (behind > 0) {
+    warn(`worktree base is ${behind} commit(s) behind ${defaultBranch}`);
+    warn(`This worktree was created from a stale ${defaultBranch}. Work here may`);
+    warn(`diverge from current upstream. To fix: delete this worktree, run`);
+    warn(`  cd ${mainRepo} && git pull`);
+    warn(`then re-create with: wtadd <path> <branch>`);
+  } else {
+    log(`worktree base is current with ${defaultBranch}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 2. Install deps if needed
 // ---------------------------------------------------------------------------
 
