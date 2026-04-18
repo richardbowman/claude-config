@@ -21,6 +21,7 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(wc:*)",
+      "Bash(curl:*)",
       "Bash(echo:*)",
       "Bash(which:*)",
       "Bash(pwd:*)",
