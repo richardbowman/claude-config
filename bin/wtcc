@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# wtcc — fetch + fast-forward main, then launch Claude Code in a new worktree.
+# Usage: wtcc [name]  (name passed to `claude --worktree`; omit for auto-generated name)
+
+set -euo pipefail
+
+wt-ff-main || exit 1
+echo "==> launching Claude Code with worktree${1:+ \"$1\"}..."
+claude --worktree ${1:+"$1"}
