@@ -48,6 +48,7 @@
       "Bash(pnpm:*)",
       "Bash(yarn:*)",
       "Bash(bun:*)",
+      "Bash(op:*)",
       "Bash(gh:*)",
       "Bash(vercel:*)",
       "WebFetch",
