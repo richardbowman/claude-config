@@ -1,7 +1,7 @@
 # User Preferences for rb-personal-assistant
 
 ## Important Senders & Contacts
-- **HVAC contractor**: HVAC contractor. High priority. 
+- **HVAC contractor**: High priority. 
   - *Preference*: If an invoice is received, ask if it's already been paid or if it needs to be paid now.
 
 ## Categories & Handling Rules
@@ -11,9 +11,9 @@
 - **Interests (Synced from Obsidian)**:
   - **Culinary & Nutrition**: Smoked meats (Brisket/Pulled Pork), bread making (Baguettes), functional nutrition (Protein optimization, Keto), and food preservation (Jam/Candle making).
   - **Health & Performance**: Cycling, Swimming, Weight Training, Bio-optimization (wellbeing protocols, skincare), and Mental performance.
-  - **Home & Design**: Renovations (specifically user's primary property and user's secondary property), Home Automation, Audio Systems, and Gardening.
+  - **Home & Design**: Renovations, Home Automation, Audio Systems, and Gardening.
   - **Tech**: Linux (Fedora), Dev Setup, and Home Automation.
-  - **Travel & Local**: Trips to Costa Rica, Portugal, Copenhagen. SW Michigan local guides.
+  - **Travel & Local**: International travel, local regional guides.
   - **Intellectual**: Product Development, Leadership, Sci-Fi (Orwell/Atwood).
 - **Action**: Do not archive immediately. Bring interesting snippets to the user's attention based on these specific themes.
 
