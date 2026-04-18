@@ -25,6 +25,7 @@ One command, idempotent. Re-running is safe — install and .env.local copy both
 ## What it does (in order)
 
 1. **Verify worktree** — uses `git rev-parse --git-dir` vs `--git-common-dir`; errors if run from the main checkout.
+1b. **Staleness check** — runs `git fetch origin --quiet` then counts commits between the worktree's `HEAD` and `origin/main` (or the repo's default branch). If behind, emits a warning with the commit count and suggests deleting the worktree, pulling main, and re-creating with `wtadd`. Does not abort — you may have already done work — but the warning is loud.
 2. **Install deps** — detects package manager from lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock*`, else `package.json`+`npm ci`) and runs a frozen-lockfile install. Skipped if `node_modules/` already exists.
 3. **Copy `.env.local`** from `<mainRepo>/.env.local` to `<worktree>/.env.local`. Skipped if the worktree already has one.
 4. **Start Podman Postgres** — finds a container matching `*-pg` whose image name contains `postgres|pgvector|postgis`. If multiple, prefers one whose name matches the main repo's basename. `podman start` if stopped.
@@ -92,6 +93,17 @@ podman start myproject-pg
 # dev server with override
 DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject?sslmode=disable" nextdev start
 ```
+
+## Creating worktrees safely
+
+Use the `wtadd` shell function (in `~/.zshrc`) instead of bare `git worktree add`. It fetches origin, fast-forwards local main if behind, then creates the worktree — so the base is always current.
+
+```sh
+# instead of: git worktree add ../feature-x -b feature-x
+wtadd ../feature-x -b feature-x
+```
+
+If the fast-forward fails (local commits diverged from remote), `wtadd` aborts and tells you to resolve it first.
 
 ## Not covered
 
