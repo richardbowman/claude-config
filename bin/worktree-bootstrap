@@ -7,10 +7,12 @@
 //   3. Copy .env.local from main repo if the worktree has none
 //   4. Find a Podman Postgres container (<app>-pg); start it if stopped
 //   5. Derive DATABASE_URL from the container's env + port mapping
-//   6. Launch `nextdev start` with DATABASE_URL injected so that
+//   6. Write DATABASE_URL + PGSSLMODE=disable into .env.local so that
 //      prisma.config.ts short-circuits to local Postgres instead of
-//      trying to obtain a DSQL OIDC token (which only works server-side)
-//   7. Briefly tail the dev log to flag MissingSecret / OIDC / DB errors
+//      trying to obtain a DSQL OIDC token (which only works server-side),
+//      and so subsequent CLI commands (prisma, etc.) pick it up automatically
+//   7. Launch `nextdev start`
+//   8. Briefly tail the dev log to flag MissingSecret / OIDC / DB errors
 //
 // Runs on Node 18+. Zero npm deps — stdlib only.
 
@@ -166,35 +168,49 @@ if (!hasCmd('podman')) {
       const user = env.POSTGRES_USER || 'postgres';
       const pass = env.POSTGRES_PASSWORD || 'postgres';
       const db   = env.POSTGRES_DB || 'postgres';
-      pgUrl = `postgres://${user}:${encodeURIComponent(pass)}@localhost:${hostPort}/${db}`;
+      pgUrl = `postgres://${user}:${encodeURIComponent(pass)}@localhost:${hostPort}/${db}?sslmode=disable`;
       log(`derived DATABASE_URL from ${pg.name}: ${pgUrl.replace(/:[^:@]*@/, ':****@')}`);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// 6. Launch nextdev with DATABASE_URL injected
+// 6. Write DATABASE_URL + PGSSLMODE into .env.local
+// ---------------------------------------------------------------------------
+
+if (pgUrl && fs.existsSync(envDst)) {
+  let envContent = fs.readFileSync(envDst, 'utf8');
+  // Replace existing DATABASE_URL line if present, otherwise append
+  if (/^DATABASE_URL=/m.test(envContent)) {
+    envContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${pgUrl}`);
+    log('updated DATABASE_URL in .env.local');
+  } else {
+    envContent += `\nDATABASE_URL=${pgUrl}\n`;
+    log('wrote DATABASE_URL to .env.local');
+  }
+  // Ensure PGSSLMODE doesn't conflict (DSQL sets require; local postgres needs disable)
+  if (/^PGSSLMODE=/m.test(envContent)) {
+    envContent = envContent.replace(/^PGSSLMODE=.*$/m, 'PGSSLMODE=disable');
+  } else {
+    envContent += 'PGSSLMODE=disable\n';
+  }
+  fs.writeFileSync(envDst, envContent);
+}
+
+// ---------------------------------------------------------------------------
+// 7. Launch nextdev
 // ---------------------------------------------------------------------------
 
 log('starting dev server via nextdev');
-const devEnv = { ...process.env };
-if (pgUrl) {
-  devEnv.DATABASE_URL = pgUrl;
-  // PGSSLMODE=require (copied from main .env.local for DSQL) breaks pg when
-  // connecting to a local Postgres that doesn't support TLS — override it.
-  devEnv.PGSSLMODE = 'disable';
-}
-
 const r = spawnSync('nextdev', ['start'], {
   cwd: toplevel,
-  env: devEnv,
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });
 if (r.status !== 0) die(`nextdev start failed (exit ${r.status})`);
 
 // ---------------------------------------------------------------------------
-// 7. Sanity-check the log for common failures
+// 8. Sanity-check the log for common failures
 // ---------------------------------------------------------------------------
 
 // nextdev writes the log path on stdout already; give it a moment then scan.
