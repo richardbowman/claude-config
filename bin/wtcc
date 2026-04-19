@@ -6,4 +6,4 @@ set -euo pipefail
 
 wt-ff-main || exit 1
 echo "==> launching Claude Code with worktree${1:+ \"$1\"}..."
-claude --worktree ${1:+"$1"}
+claude --worktree ${1:+"$1"} "/worktree-bootstrap"

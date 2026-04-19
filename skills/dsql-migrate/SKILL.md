@@ -123,44 +123,65 @@ git push
 
 After deployment finishes:
 
-**Preview:**
+> **Preview deployments are behind Vercel SSO protection.** Plain `curl` will return an HTML login page, not JSON. Use `vercel curl` which handles authentication automatically. Note the `--` separator — curl flags go after it.
+
+**Preview (use `vercel curl`):**
 ```sh
-curl -X POST https://myapp-git-feature-branch.vercel.app/api/admin/migrate \
-  -H "Content-Type: application/json" \
-  -d '{"name":"002_add_priority"}'
+SECRET="your-migration-secret"
+vercel curl /api/admin/migrate \
+  --deployment https://myapp-git-feature-branch.vercel.app \
+  -- --request POST \
+     --header "Content-Type: application/json" \
+     --header "x-migration-secret: $SECRET" \
+     --data '{"script":"002_add_priority"}'
 ```
 
-**Production:**
+**Production (also use `vercel curl` — per-deployment `*.vercel.app` URLs are behind Vercel auth too):**
 ```sh
-curl -X POST https://myapp.vercel.app/api/admin/migrate \
-  -H "Content-Type: application/json" \
-  -d '{"name":"002_add_priority"}'
+vercel curl /api/admin/migrate \
+  --deployment https://myapp-abc123.vercel.app \
+  --cwd /path/to/main-repo \
+  -- --request POST \
+     --header "Content-Type: application/json" \
+     --header "x-migration-secret: $SECRET" \
+     --data '{"script":"002_add_priority"}'
 ```
+
+> Only a custom domain (e.g. `myapp.com`) would be reachable via plain `curl`. All `*.vercel.app` URLs require `vercel curl`.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Applied 002_add_priority to \"myapp_prod\""
+  "message": "Migration completed successfully.\n\nUsing schema: myapp_prod\n✓ ...",
+  "schema": "myapp_prod"
 }
 ```
 
 ## Checking migration status
 
-Get the current status for an environment:
-
+**Preview:**
 ```sh
-curl https://myapp.vercel.app/api/admin/migrate
+vercel curl /api/admin/migrate \
+  --deployment https://myapp-git-feature-branch.vercel.app \
+  -- --header "x-migration-secret: $SECRET"
 ```
+
+**Production:**
+```sh
+vercel curl /api/admin/migrate \
+  --deployment https://myapp-abc123.vercel.app \
+  --cwd /path/to/main-repo \
+  -- --header "x-migration-secret: $SECRET"
+```
+
+To find the latest production deployment URL: `vercel list --cwd /path/to/main-repo` — it's the first result.
 
 **Response:**
 ```json
 {
   "schema": "myapp_prod",
-  "migrations": [
-    {"name": "001_init", "applied": true},
-    {"name": "002_add_priority", "applied": true}
-  ]
+  "appliedMigrations": ["001_init", "002_add_priority"],
+  "manifest": [...]
 }
 ```
 
@@ -234,6 +255,43 @@ podman exec <container> psql -U postgres -d <db> \
   -c "SET search_path TO myapp_dev;" \
   -c "CREATE INDEX IF NOT EXISTS idx_name ON table_name (column_name);"
 ```
+
+### ❌ DSQL says "unsupported mode, please use CREATE INDEX ASYNC"
+
+**Symptom:** Running a migration against preview or production returns `✗ Error: unsupported mode. please use CREATE INDEX ASYNC.` for every index creation.
+
+**Cause:** The migration runner has logic to strip `ASYNC` from index statements for local Postgres compatibility, but it's running unconditionally — including on DSQL, which *requires* `ASYNC`.
+
+**Fix:** Gate the strip on `process.env.DATABASE_URL` being set. That env var is only set in local dev (via `worktree-bootstrap`); on Vercel/DSQL it's absent.
+
+```ts
+// WRONG — unconditional strip breaks DSQL
+const stmt = sql.replace(/\bINDEX ASYNC\b/gi, 'INDEX')
+
+// RIGHT — only strip when running against local Postgres
+const stmt = process.env.DATABASE_URL
+  ? sql.replace(/\bINDEX ASYNC\b/gi, 'INDEX')
+  : sql
+```
+
+**Watch for two execution paths.** The migration `route.ts` often has both an inline POST handler loop and a `runSqlScript()` helper function. Both need this fix independently — it's easy to fix one and miss the other. Search for all occurrences of `INDEX ASYNC` in the file before committing.
+
+### ❌ Table exists but is missing columns
+
+**Symptom:** App throws `column "xyz" does not exist` at runtime. The table exists in the schema but was created from an older migration before the column was added.
+
+**Cause:** A new migration that adds the column was never applied to this environment. Common when a DB was seeded from a stale full schema, or when an incremental migration was skipped.
+
+**Fix:** Write the missing column as a migration (`ADD COLUMN IF NOT EXISTS`) and apply it via the API:
+```sh
+vercel curl /api/admin/migrate --deployment <URL> \
+  -- --request POST \
+     --header "x-migration-secret: $SECRET" \
+     --header "Content-Type: application/json" \
+     --data '{"script":"NNN-add-missing-column.sql"}'
+```
+
+**Do NOT** apply DDL directly to the database. Direct changes bypass the migration tracker, create environment drift (preview has it, prod doesn't), and won't be reproducible. Always create a migration file and run it through the API.
 
 ### ❌ Foreign key constraint errors
 
@@ -315,6 +373,15 @@ For breaking changes (dropping columns, renaming tables):
 4. **Deploy code that only reads new column**
 5. **Run migration to drop old column** (after verifying step 4 works)
 
+## Full schema vs. incrementals
+
+Many projects maintain both an authoritative full schema (e.g. `001-full-schema.sql`) for fresh DB bootstrapping AND incremental migrations for patching existing DBs. Keep these facts in mind:
+
+- The full schema should use `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX ASYNC IF NOT EXISTS` so it's safe to re-run on an existing DB.
+- The full schema may reference columns that are added by later incrementals (e.g. an index on `tasks.task_list_id` where that column is added by `task-lists.sql`). If the full schema runs first, that index creation will fail with "column does not exist". This is **non-fatal** — the index will be created when the incremental runs.
+- Apply order: full schema first, then incrementals in sequence.
+- Never use the full schema as a substitute for incrementals on existing DBs. Always apply the targeted incremental; the full schema is only for fresh environments.
+
 ## Troubleshooting checklist
 
 - [ ] `postinstall` script runs `aurora-dsql-prisma migrate`
@@ -323,10 +390,13 @@ For breaking changes (dropping columns, renaming tables):
 - [ ] No foreign key constraints in generated SQL
 - [ ] `prisma.config.ts` has a `url` fallback (for dialect detection)
 - [ ] `schema.prisma` has `relationMode = "prisma"`
-- [ ] Migration is registered in `MIGRATIONS` array
+- [ ] Migration is registered in manifest / MIGRATIONS array
 - [ ] `VERCEL_ENV` is set correctly in deployment
 - [ ] No `PGSCHEMA` environment variable is set
 - [ ] `getActiveSchema()` returns the expected schema name
+- [ ] `INDEX ASYNC` stripping in migration runner is gated on `DATABASE_URL` being set, not unconditional
+- [ ] If migration runner has both an inline loop and a helper function, both have the same SQL transformation logic
+- [ ] Using `vercel curl --deployment <URL>` for protected preview environments, not plain `curl`
 
 ## Reference
 
