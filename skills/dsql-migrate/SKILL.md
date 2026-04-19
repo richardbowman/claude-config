@@ -192,6 +192,49 @@ The `?? "postgresql://localhost/prisma"` fallback is essential — it's only use
 
 **Fix:** Check the deployment logs — `VERCEL_ENV` should be `preview` or `production`, not `development`.
 
+### ❌ Local dev / E2E tests say "table X does not exist" after migration
+
+**Symptom:** Migration applied successfully (confirmed via `/api/admin/migrate` status), but local dev or E2E tests crash with `The table 'public.X' does not exist in the current database`.
+
+**Root cause:** The migration runner targets `getActiveSchema()` (e.g. `myapp_dev`). But `lib/prisma.ts` may have two code paths — one for `DATABASE_URL` (local) and one for DSQL. If the local path creates `PrismaPg(pool)` without a `{ schema }` option, Prisma queries `public` instead of `myapp_dev`. The tables never meet.
+
+**Fix — update `lib/prisma.ts`** to pass the schema on the local path too:
+
+```ts
+import { getActiveSchema } from './schema'
+
+// Before:
+if (process.env.DATABASE_URL) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool)  // ← queries public
+  return new PrismaClient({ adapter })
+}
+
+// After:
+if (process.env.DATABASE_URL) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool, { schema: getActiveSchema() })  // ← same schema everywhere
+  return new PrismaClient({ adapter })
+}
+```
+
+**Do NOT** work around this by manually applying DDL to `public`. That creates a silent schema split: local dev queries one place, DSQL queries another, and the two drift apart silently.
+
+### ❌ `CREATE INDEX ASYNC IF NOT EXISTS` syntax error on local Postgres
+
+**Symptom:** Migration applied via `/api/admin/migrate` shows `✗ Error: syntax error at or near "IF"` for index creation lines, but table and column DDL succeeds.
+
+**Cause:** Local Postgres doesn't support the `ASYNC` keyword (it's DSQL-specific). Postgres parses `CREATE INDEX ASYNC IF NOT EXISTS idx ON ...` as "create an index named ASYNC, then see unexpected IF".
+
+**This is safe to ignore for local dev.** The table and column DDL still applied correctly. The `ASYNC` indexes are a DSQL performance optimization; regular Postgres doesn't need them and will use its own indexing.
+
+**If you need local indexes** (e.g. for query performance testing), apply them separately without the `ASYNC` keyword:
+```sh
+podman exec <container> psql -U postgres -d <db> \
+  -c "SET search_path TO myapp_dev;" \
+  -c "CREATE INDEX IF NOT EXISTS idx_name ON table_name (column_name);"
+```
+
 ### ❌ Foreign key constraint errors
 
 **Symptom:** Migration fails with "foreign key constraints are not supported".

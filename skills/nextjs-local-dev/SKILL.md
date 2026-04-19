@@ -179,3 +179,10 @@ After pulling, `nextdev logs` should show `- Environments: .env.local` in the Ne
 - **`nextdev status` says "running" but the site is down** — Next.js is crashing per-request. `nextdev logs -f` and reload the page.
 - **`nextdev list` shows a ghost entry** — `nextdev clean` removes registrations whose pids no longer match node/next.
 - **Port 3000 is taken by something not `nextdev`** — identify with `lsof -iTCP:3000 -sTCP:LISTEN` or `ss -tlnp | grep :3000`. Ask the user before killing an unknown process.
+- **`prisma: command not found` (or any other CLI tool) in dev log** — the default `pnpm dev` script invokes CLIs that aren't in PATH inside a worktree. Use `--cmd` with `npx`:
+  ```sh
+  nextdev start --cmd "npx prisma generate && npx next dev"
+  # or if DATABASE_URL needs injecting:
+  DATABASE_URL="postgres://..." nextdev start --cmd "npx prisma generate && npx next dev"
+  ```
+  In a git worktree, `pnpm` does not surface the main repo's `node_modules/.bin` into the shell PATH. `npx` resolves the tool from the nearest `node_modules` regardless of PATH.
