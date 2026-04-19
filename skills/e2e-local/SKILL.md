@@ -76,9 +76,18 @@ nextdev logs -n 30
 
 ## Step 3 — run the tests
 
+Run via `npx` to avoid the `dotenv: command not found` failure that occurs when `pnpm test:e2e` tries to shell out to a `dotenv` binary that isn't in PATH in a worktree:
+
 ```sh
-pnpm test:e2e
+# ✅ Reliable — works even when dotenv isn't in PATH
+npx dotenv-cli -e .env.e2e -- npx playwright test
+
+# Run a subset by file or grep:
+npx dotenv-cli -e .env.e2e -- npx playwright test e2e/tests/02-estate.spec.ts
+npx dotenv-cli -e .env.e2e -- npx playwright test --grep "some test name"
 ```
+
+> **Why not `pnpm test:e2e`?** The npm script is `dotenv -e .env.e2e -- playwright test`. In a worktree, `dotenv` (the CLI wrapper installed as a dev dependency) isn't surfaced into PATH by pnpm. `npx dotenv-cli` installs it on demand and always works.
 
 All tests should pass. If they don't, check:
 
@@ -86,6 +95,7 @@ All tests should pass. If they don't, check:
 - The `CredentialsSignin` error means `.env.e2e`'s `AUTH_SECRET` doesn't match the server's — re-check step 1
 - `ECONNREFUSED` on `:5433` means the Podman Postgres container isn't running — `podman start localdb-pg` (or whatever the container is named; check with `podman ps -a`)
 - If the browser times out waiting for `/dashboard`, the login failed — check the dev server logs for what the credentials auth handler returned
+- **`table X does not exist in current database`** — see "Schema mismatch" section below
 
 ## All together (clean run from scratch)
 
@@ -99,6 +109,46 @@ worktree-bootstrap
 # 3. Run tests
 pnpm test:e2e
 ```
+
+## Step 1 — derive the correct DATABASE_URL and PLAYWRIGHT_BASE_URL
+
+Do not hardcode `:5433/localdb` or `:3000` in `.env.e2e`. Pull the real values from the running environment:
+
+```sh
+# Get the actual port the dev server is on
+PORT=$(nextdev status | grep 'port:' | awk '{print $2}')
+
+# Get the actual DB URL from the running server (worktree-bootstrap sets it)
+# Use the same URL the dev server was started with — check nextdev logs if unsure
+```
+
+Set `PLAYWRIGHT_BASE_URL=http://localhost:${PORT}` in `.env.e2e`.
+
+## Schema mismatch — `table X does not exist in current database`
+
+The E2E Playwright `db` fixture creates a plain Prisma client connected to local Postgres. If `lib/prisma.ts` routes the local `DATABASE_URL` path without a `schema` option, that client queries `public`. But the `/api/admin/migrate` runner targets `getActiveSchema()` (e.g. `myapp_dev`), so newly migrated tables only exist in `myapp_dev` — not `public`.
+
+**Do NOT fix this by applying DDL to `public`.** That fragments the schema and creates divergence between local and DSQL.
+
+**The correct fix** is in `lib/prisma.ts` — make the local path pass the same schema as the DSQL path:
+
+```ts
+// Before (broken for E2E and local dev consistency):
+if (process.env.DATABASE_URL) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool)           // ← no schema = queries public
+  return new PrismaClient({ adapter })
+}
+
+// After (correct):
+if (process.env.DATABASE_URL) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool, { schema: getActiveSchema() })  // ← same schema everywhere
+  return new PrismaClient({ adapter })
+}
+```
+
+Once `lib/prisma.ts` is patched, apply any pending migrations via `/api/admin/migrate` and the E2E fixture will find tables in the same schema the dev server uses.
 
 ## Keeping `.env.e2e` in sync
 

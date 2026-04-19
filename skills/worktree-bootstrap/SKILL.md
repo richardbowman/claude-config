@@ -33,6 +33,12 @@ One command, idempotent. Re-running is safe — install and .env.local copy both
 6. **Launch `nextdev start`** with the derived `DATABASE_URL` in `process.env`. This overrides whatever the copied `.env.local` had (which would be the DSQL URL from `vercel env pull`), so `prisma.config.ts` sees the local connection string and skips the DSQL token provider.
 7. **Scan the dev log** after 3s for common failure patterns (`MissingSecret`, `OIDC`/`token expired`, `ECONNREFUSED :5432`, Prisma connect errors) and flag them.
 
+> **If the scan shows `prisma: command not found`:** The default `pnpm dev` script calls `prisma generate` but the `prisma` binary isn't in PATH in the worktree. Re-launch with `npx`:
+> ```sh
+> nextdev stop
+> DATABASE_URL="..." nextdev start --cmd "npx prisma generate && npx next dev"
+> ```
+
 ## The prisma.config.ts short-circuit pattern
 
 This script assumes the project's `prisma.config.ts` reads `process.env.DATABASE_URL` and, when present, uses it directly **instead of** configuring the DSQL adapter/token provider. Typical shape:
@@ -57,6 +63,22 @@ export default defineConfig({
 ```
 
 The exact adapter/tokenProvider shape varies by project and Prisma version — check current `@prisma/adapter-*` docs before writing. The important invariant: **`DATABASE_URL` being set must be the "local mode" signal**, and `worktree-bootstrap` always sets it.
+
+## CLI tools in worktrees — always use `npx`
+
+In a git worktree, the shell PATH does not include the main repo's `node_modules/.bin`. Any CLI tool installed as a project dependency (Prisma, ESLint, tsc, etc.) must be invoked via `npx`:
+
+```sh
+# ❌ Fails in worktrees — "Command not found"
+pnpm prisma generate
+pnpm tsc --noEmit
+
+# ✅ Works — npx finds the tool from the nearest node_modules
+npx prisma generate
+npx tsc --noEmit
+```
+
+This is true even if `node_modules/` exists. The `pnpm` binary forwarding and shell PATH setup only work from the main checkout, not from a worktree subdirectory.
 
 ## Trigger signals
 
@@ -110,3 +132,11 @@ If the fast-forward fails (local commits diverged from remote), `wtadd` aborts a
 - **Seeding / migrating** — add `prisma migrate deploy` or equivalent to your workflow if the worktree needs schema changes applied.
 - **Non-Prisma ORMs** — the short-circuit pattern applies to any ORM that reads `DATABASE_URL`; adjust the config file name in your head.
 - **Pulling fresh env vars** — if `.env.local` in main is stale, `cd <main> && vercel env pull` first, then re-run `worktree-bootstrap`.
+
+## After adding a new migration
+
+If the worktree introduces new tables/columns, apply the migration before running E2E or testing locally:
+
+1. Apply via the `/api/admin/migrate` endpoint (GET to check status, POST with `{"script":"your-migration.sql"}` to apply)
+2. Confirm the tables exist under the active schema (check `lib/prisma.ts` to see which schema local dev targets)
+3. **Do not manually apply DDL to `public`** — if local dev queries `public` but the migration goes to `myapp_dev`, the fix is in `lib/prisma.ts`, not in patching `public` (see `dsql-migrate` skill)
