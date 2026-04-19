@@ -182,7 +182,13 @@ After pulling, `nextdev logs` should show `- Environments: .env.local` in the Ne
 - **`prisma: command not found` (or any other CLI tool) in dev log** — the default `pnpm dev` script invokes CLIs that aren't in PATH inside a worktree. Use `--cmd` with `npx`:
   ```sh
   nextdev start --cmd "npx prisma generate && npx next dev"
-  # or if DATABASE_URL needs injecting:
-  DATABASE_URL="postgres://..." nextdev start --cmd "npx prisma generate && npx next dev"
   ```
   In a git worktree, `pnpm` does not surface the main repo's `node_modules/.bin` into the shell PATH. `npx` resolves the tool from the nearest `node_modules` regardless of PATH.
+
+- **DATABASE_URL needs to be set for local Postgres** — **do not** inject it inline on the `nextdev start` command line (e.g. `DATABASE_URL="..." nextdev start`). The inline value is not persisted and will be lost on the next `nextdev restart`. Instead, write it to `.env.local` so it survives restarts:
+  ```sh
+  # Add or update DATABASE_URL in .env.local
+  echo 'DATABASE_URL="postgres://postgres:postgres@localhost:5433/mydb?sslmode=disable"' >> .env.local
+  nextdev start
+  ```
+  If the worktree was bootstrapped via `worktree-bootstrap`, that script already launched `nextdev` with the correct URL injected at start time — use `worktree-bootstrap` again if you need a clean restart, rather than reconstructing the command manually.
