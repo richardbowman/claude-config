@@ -72,36 +72,18 @@ vercel ls --cwd $MAIN_REPO 2>&1 | grep "Production" | head -1 | awk '{print $3}'
 
 ## Wait for a production deployment to go Ready
 
-Use after merging to main. Polls until the deployment for the current HEAD commit is ready.
+Use after merging to main. Use the pre-built `vercel-wait-deploy` script — do NOT write an inline polling loop.
 
 ```bash
-MAIN_REPO=/Users/rickbowman/projects/golden-wealth-app
-TEAM_ID=$(jq -r .orgId     $MAIN_REPO/.vercel/project.json)
-PROJECT_ID=$(jq -r .projectId $MAIN_REPO/.vercel/project.json)
-SHA=$(git -C $MAIN_REPO rev-parse HEAD)
-TOKEN=$(jq -r .token ~/Library/Application\ Support/com.vercel.cli/auth.json 2>/dev/null \
-  || jq -r .token ~/.local/share/com.vercel.cli/auth.json)
-
-# 1. Wait for Vercel to register the deployment
-while true; do
-  DEPLOY_URL=$(curl -s -H "Authorization: Bearer $TOKEN" \
-    "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=production&limit=5" \
-    | jq -r --arg sha "$SHA" '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' \
-    | head -1)
-  [[ -n "$DEPLOY_URL" ]] && break
-  echo "waiting for deployment to appear..." && sleep 10
-done
-
-# 2. Poll until Ready or Error
-while true; do
-  ROW=$(vercel ls --cwd $MAIN_REPO 2>&1 | grep "$DEPLOY_URL")
-  DEPLOY_STATUS=$(echo "$ROW" | grep -oE '(Ready|Building|Error)')
-  echo "$DEPLOY_URL — ${DEPLOY_STATUS:-unknown}"
-  [[ "$DEPLOY_STATUS" == "Ready" ]] && echo "✓ Ready: https://$DEPLOY_URL" && break
-  [[ "$DEPLOY_STATUS" == "Error" ]] && echo "✗ Build failed" && break
-  sleep 15
-done
+vercel-wait-deploy --cwd $MAIN_REPO
 ```
+
+Options:
+- `--cwd <dir>` — project root containing `.vercel/project.json` (required when in a worktree)
+- `--sha <sha>` — commit SHA to wait for (default: HEAD of `--cwd`)
+- `--timeout <secs>` — max wait time in seconds (default: 600)
+
+On success, prints the URL and writes it to `/tmp/vercel_prod_url.txt` for use in subsequent steps.
 
 ---
 

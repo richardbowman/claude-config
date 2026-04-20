@@ -52,6 +52,7 @@
       "Bash(op:*)",
       "Bash(gh:*)",
       "Bash(vercel:*)",
+      "Bash(vercel-wait-deploy:*)",
       "Bash(cmux:*)",
       "WebFetch",
       "WebSearch"
