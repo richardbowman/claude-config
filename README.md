@@ -38,6 +38,9 @@ Personal Claude Code configuration synced across machines.
 
 - **`nextdev`** — scoped Next.js dev-server manager. Start/stop/restart/list servers by worktree, logs, doctor. Safely avoids wildcard process kills. See `skills/nextjs-local-dev/SKILL.md` for full reference.
 - **`worktree-bootstrap`** — one-command prep for a fresh git worktree (install deps, copy `.env.local`, start Podman Postgres, inject `DATABASE_URL`, launch `nextdev`). See `skills/worktree-bootstrap/SKILL.md`.
+- **`wtcc [name]`** — fetch + fast-forward main, then launch Claude Code in a new git worktree. Defaults to a timestamped branch name (`work-YYYYMMDD-HHMMSS`) so each invocation always gets its own branch. Runs `/worktree-bootstrap` on entry.
+- **`wtadd <path> [branch] [...]`** — safe wrapper around `git worktree add`: fast-forwards main first, then creates the worktree. Prevents branching off a stale base.
+- **`wt-ff-main`** — fetch origin and fast-forward local main if behind. Used internally by `wtcc` and `wtadd`; can also be run standalone.
 
 ## Setup on a new machine
 
