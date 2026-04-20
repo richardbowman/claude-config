@@ -30,14 +30,8 @@ One command, idempotent. Re-running is safe — install and .env.local copy both
 3. **Copy `.env.local`** from `<mainRepo>/.env.local` to `<worktree>/.env.local`. Skipped if the worktree already has one.
 4. **Start Podman Postgres** — finds a container matching `*-pg` whose image name contains `postgres|pgvector|postgis`. If multiple, prefers one whose name matches the main repo's basename. `podman start` if stopped.
 5. **Derive `DATABASE_URL`** from the container's env (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) and port mapping — `postgres://<user>:<pass>@localhost:<hostPort>/<db>?sslmode=disable`. The `sslmode=disable` suffix is always appended — local Podman Postgres containers don't have SSL configured and Prisma will throw "The server does not support SSL connections" without it.
-6. **Launch `nextdev start`** with the derived `DATABASE_URL` in `process.env`. This overrides whatever the copied `.env.local` had (which would be the DSQL URL from `vercel env pull`), so `prisma.config.ts` sees the local connection string and skips the DSQL token provider.
-7. **Scan the dev log** after 3s for common failure patterns (`MissingSecret`, `OIDC`/`token expired`, `ECONNREFUSED :5432`, Prisma connect errors) and flag them.
-
-> **If the scan shows `prisma: command not found`:** The default `pnpm dev` script calls `prisma generate` but the `prisma` binary isn't in PATH in the worktree. Re-launch with `npx`:
-> ```sh
-> nextdev stop
-> DATABASE_URL="..." nextdev start --cmd "npx prisma generate && npx next dev"
-> ```
+6. **Write `DATABASE_URL` to `.env.local`** in the worktree, overwriting any existing `DATABASE_URL` line. This ensures `prisma.config.ts` sees the local connection string and skips the DSQL token provider, and the value persists across server restarts.
+7. **Done.** Use the `nextjs-local-dev` skill to start the dev server (`nextdev start`).
 
 ## The prisma.config.ts short-circuit pattern
 
@@ -112,8 +106,12 @@ cp ../main-repo/.env.local .
 # postgres
 podman start myproject-pg
 
-# dev server with override
-DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject?sslmode=disable" nextdev start
+# write DATABASE_URL to .env.local (overwrite any existing line)
+grep -v '^DATABASE_URL=' .env.local > .env.local.tmp && mv .env.local.tmp .env.local
+echo 'DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject?sslmode=disable"' >> .env.local
+
+# then start via nextjs-local-dev skill
+nextdev start
 ```
 
 ## Creating worktrees safely
