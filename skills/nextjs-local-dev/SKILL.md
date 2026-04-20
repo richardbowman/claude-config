@@ -191,4 +191,4 @@ After pulling, `nextdev logs` should show `- Environments: .env.local` in the Ne
   echo 'DATABASE_URL="postgres://postgres:postgres@localhost:5433/mydb?sslmode=disable"' >> .env.local
   nextdev start
   ```
-  If the worktree was bootstrapped via `worktree-bootstrap`, that script already launched `nextdev` with the correct URL injected at start time — use `worktree-bootstrap` again if you need a clean restart, rather than reconstructing the command manually.
+  If the worktree was bootstrapped via `worktree-bootstrap`, the correct `DATABASE_URL` is already written into `.env.local` — just run `nextdev start` normally.

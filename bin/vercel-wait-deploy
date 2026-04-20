@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# vercel-wait-deploy — wait for the production Vercel deployment for the
+# current git HEAD (or a given SHA) to reach Ready or Error.
+#
+# Usage: vercel-wait-deploy [--cwd <dir>] [--sha <commit-sha>] [--timeout <seconds>]
+#
+# Options:
+#   --cwd <dir>       Project directory containing .vercel/project.json (default: $PWD)
+#   --sha <sha>       Git commit SHA to wait for (default: HEAD of --cwd)
+#   --timeout <secs>  Max seconds to wait (default: 600)
+#
+# Outputs the production URL on success; exits 1 on error or timeout.
+# Writes the URL to /tmp/vercel_prod_url.txt on success for subsequent steps.
+
+set -euo pipefail
+
+CWD="$PWD"
+SHA=""
+TIMEOUT=600
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cwd)      CWD="$2";     shift 2 ;;
+    --sha)      SHA="$2";     shift 2 ;;
+    --timeout)  TIMEOUT="$2"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+PROJECT_JSON="$CWD/.vercel/project.json"
+if [[ ! -f "$PROJECT_JSON" ]]; then
+  echo "Error: $PROJECT_JSON not found. Run 'vercel link' in $CWD first." >&2
+  exit 1
+fi
+
+TEAM_ID=$(jq -r .orgId     "$PROJECT_JSON")
+PROJECT_ID=$(jq -r .projectId "$PROJECT_JSON")
+
+if [[ -z "$SHA" ]]; then
+  SHA=$(git -C "$CWD" rev-parse HEAD)
+fi
+
+TOKEN="${VERCEL_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  AUTH_FILE="$HOME/Library/Application Support/com.vercel.cli/auth.json"
+  if [[ -f "$AUTH_FILE" ]]; then
+    TOKEN=$(jq -r .token "$AUTH_FILE" 2>/dev/null || true)
+  fi
+fi
+if [[ -z "$TOKEN" ]]; then
+  echo "Error: no Vercel token — set VERCEL_TOKEN or run 'vercel login'." >&2
+  exit 1
+fi
+
+API="https://api.vercel.com"
+DEADLINE=$(( $(date +%s) + TIMEOUT ))
+
+echo "Waiting for deployment of $SHA in $CWD ..."
+
+# Step 1: Wait for the deployment to appear for this commit
+DEPLOY_URL=""
+while true; do
+  DEPLOY_URL=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+    "$API/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=production&limit=10" \
+    | jq -r --arg sha "$SHA" \
+        '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' \
+    | head -1 || true)
+
+  if [[ -n "$DEPLOY_URL" ]]; then
+    echo "Found deployment: $DEPLOY_URL"
+    break
+  fi
+
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "Timeout: deployment for $SHA never appeared." >&2
+    exit 1
+  fi
+
+  echo "  deployment not yet registered, retrying in 10s..."
+  sleep 10
+done
+
+# Step 2: Poll until Ready or Error
+while true; do
+  STATUS=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+    "$API/v13/deployments/$DEPLOY_URL?teamId=$TEAM_ID" \
+    | jq -r '.readyState // "UNKNOWN"' || echo "UNKNOWN")
+
+  echo "  status: $STATUS"
+
+  if [[ "$STATUS" == "READY" ]]; then
+    echo "Production deployment ready: https://$DEPLOY_URL"
+    echo "https://$DEPLOY_URL" > /tmp/vercel_prod_url.txt
+    exit 0
+  fi
+
+  if [[ "$STATUS" == "ERROR" || "$STATUS" == "CANCELED" ]]; then
+    echo "Deployment failed with status: $STATUS" >&2
+    exit 1
+  fi
+
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "Timeout waiting for deployment to become ready (last status: $STATUS)." >&2
+    exit 1
+  fi
+
+  sleep 15
+done
