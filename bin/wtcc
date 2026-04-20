@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # wtcc — fetch + fast-forward main, then launch Claude Code in a new worktree.
-# Usage: wtcc [name]  (name passed to `claude --worktree`; omit for auto-generated name)
+# Usage: wtcc [name]  (defaults to work-YYYYMMDD-HHMMSS if omitted)
+#
+# Always generates a unique branch name so each invocation gets its own branch.
 
 set -euo pipefail
 
+name="${1:-work-$(date +%Y%m%d-%H%M%S)}"
+
 wt-ff-main || exit 1
-echo "==> launching Claude Code with worktree${1:+ \"$1\"}..."
-claude --worktree ${1:+"$1"} "/worktree-bootstrap"
+echo "==> launching Claude Code in new worktree on branch: $name"
+claude --worktree "$name" "/worktree-bootstrap"
