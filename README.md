@@ -19,7 +19,7 @@ Personal Claude Code configuration synced across machines.
 |---|---|
 | `nextjs-local-dev` | Run/monitor Next.js dev servers via the `nextdev` CLI. Per-worktree isolation, safe stop/restart, env-var recipes for worktrees. |
 | `podman-postgres` | Local Postgres via Podman — cross-platform, named volumes, backup/restore, upgrades. |
-| `vercel-logs` | Pull historical Vercel deployment logs; commit-pinned deploy monitoring. |
+| `vercel-tools` | Vercel CLI recipes — migration status/apply, deployment monitoring, historical logs. |
 | `verify-before-coding` | Forces Claude to verify APIs/flags before writing code in fast-moving ecosystems (Vercel, Next.js, AI SDK, Node tooling). |
 | `worktree-bootstrap` | Prep a git worktree for local Next.js dev when the project uses Vercel/DSQL — installs deps, copies .env.local, starts Podman Postgres, injects DATABASE_URL, launches nextdev. |
 

@@ -18,6 +18,8 @@
 #   - cmux                      Ghostty-based terminal for AI coding agents
 #                               (requires 3rd-party tap: manaflow-ai/cmux)
 #   - google-drive              Google Drive for Desktop (file sync)
+# CLI tools:
+#   - databricks                Databricks CLI (requires 3rd-party tap: databricks/tap)
 # Fonts:
 #   - font-source-code-pro      Adobe's Source Code Pro (programmer font)
 set -euo pipefail
@@ -89,6 +91,15 @@ if brew list --cask cmux >/dev/null 2>&1; then
 else
   log "brew install --cask manaflow-ai/cmux/cmux"
   brew install --cask manaflow-ai/cmux/cmux
+fi
+
+# Databricks CLI (formula from databricks/tap)
+if brew list databricks >/dev/null 2>&1; then
+  ok "databricks (already installed)"
+else
+  log "brew tap databricks/tap && brew install databricks"
+  brew tap databricks/tap
+  brew install databricks
 fi
 
 log "Done. Apps installed into /Applications."

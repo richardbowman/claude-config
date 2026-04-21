@@ -1,6 +1,6 @@
 ---
 name: vercel-tools
-description: Vercel CLI recipes for this project — checking migration status, applying migrations to preview/production, watching deployments go ready, and pulling historical logs. Use whenever the user asks to run migrations, check deploy status, investigate errors, or manage Vercel deployments.
+description: Vercel CLI recipes for this project — checking migration status, applying migrations to preview/production, watching deployments go ready, debugging failed builds, and pulling historical logs. Use whenever the user asks to run migrations, check deploy status, investigate build errors, or manage Vercel deployments.
 ---
 
 # Vercel Tools
@@ -97,18 +97,66 @@ On success, prints the URL and writes it to `/tmp/vercel_prod_url.txt` for use i
 
 ---
 
+## Debug failed builds
+
+When a deployment fails, use `vercel inspect` with `--logs` to see the full build output including errors, test failures, and dependency issues:
+
+```bash
+# From GitHub PR checks or Vercel dashboard, get the deployment ID (starts with dpl_)
+# Then inspect with logs:
+npx vercel inspect dpl_<DEPLOYMENT_ID> --logs --scope <SCOPE_NAME>
+
+# Example:
+npx vercel inspect dpl_Aix3L5sBTVQMRt3qM9wKkEbtYLUD --logs --scope rv-bankrate-projects
+
+# Pipe to tail for last N lines (error usually at the end):
+npx vercel inspect dpl_<ID> --logs --scope <SCOPE> 2>&1 | tail -100
+```
+
+**What this shows:**
+- Full build stdout/stderr
+- Test failures (unit tests, linting, type errors)
+- Dependency installation errors
+- Build script failures
+- Environment variable issues
+- Exact line where build failed
+
+**Getting the deployment ID:**
+
+From GitHub PR:
+```bash
+gh pr checks <PR_NUMBER> | grep "Vercel.*fail"  # Shows failing check with URL
+# Extract dpl_* from the URL
+```
+
+From Vercel dashboard URL:
+```
+https://vercel.com/.../dpl_Aix3L5sBTVQMRt3qM9wKkEbtYLUD
+                        ^-- deployment ID starts here
+```
+
+**Troubleshooting tip:** Scroll to the end of the logs first — the error is usually in the last 50-100 lines. Look for:
+- `Error:` or `ERROR` lines
+- Test suite failures
+- `Command "..." exited with 1`
+- Stack traces
+
+---
+
 ## Historical logs
 
 ```bash
 # Get deployment ID from URL
 vercel inspect <URL> | grep '^\s*id'  # → dpl_abc123
 
-# Pull logs
+# Pull runtime logs (after deployment is live)
 vercel logs dpl_abc123 --no-follow                    # all recent
 vercel logs dpl_abc123 --no-follow --status-code 500  # errors only
 vercel logs dpl_abc123 --no-follow --query "error"    # substring filter
 vercel logs dpl_abc123 --no-follow --json | jq '.message'
 ```
+
+**Note:** `vercel logs` shows **runtime logs** (requests, function invocations). For **build logs**, use `vercel inspect --logs` (see "Debug failed builds" above).
 
 `--no-follow` is required — without it, `vercel logs` tails forever and blocks the shell.
 
