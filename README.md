@@ -113,7 +113,7 @@ Make sure `~/.local/bin` is on your `PATH` (add `export PATH="$HOME/.local/bin:$
 
 ## Status line
 
-The status line is configured in `settings.json` to run `~/.claude/statusline-command.sh` (symlinked from this repo via `bootstrap.sh`).
+The status line is configured in `settings.json` to run `bin/statusline-command.sh` from this repo (symlinked into `~/.local/bin/` via `bootstrap.sh`).
 
 It shows:
 - **nextdev URL** — dynamically looks up the running `nextdev` port for the current workspace (e.g. `http://localhost:3001`). Hidden if no server is running.
