@@ -1,6 +1,16 @@
 {
   "version": 1,
   "skills": {
+    "bankrate-databricks": {
+      "source": "bankrate-prototypes/bankrate-skills",
+      "sourceType": "github",
+      "computedHash": "d39c81ca089cedd3c85955dcdca5a6b7b0b1dd13f345fb515e98aed907133eb9"
+    },
+    "bankrate-design": {
+      "source": "bankrate-prototypes/bankrate-skills",
+      "sourceType": "github",
+      "computedHash": "38df640117b7216e50da8b6b3de0bd3410477c506d4744fa60528f7c66ba8e62"
+    },
     "defuddle": {
       "source": "kepano/obsidian-skills",
       "sourceType": "github",
