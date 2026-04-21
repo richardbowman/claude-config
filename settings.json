@@ -1,67 +1,33 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "bash /Users/rickbowman/.claude/statusline-command.sh"
-  },
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Read",
       "Glob",
       "Grep",
-      "Bash(git:*)",
-      "Bash(ls:*)",
-      "Bash(cp:*)",
-      "Bash(mv:*)",
-      "Bash(mkdir:*)",
-      "Bash(touch:*)",
-      "Bash(cat:*)",
-      "Bash(head:*)",
-      "Bash(tail:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)",
-      "Bash(wc:*)",
-      "Bash(lsof:*)",
-      "Bash(curl:*)",
-      "Bash(node:*)",
-      "Bash(openssl:*)",
-      "Bash(python:*)",
-      "Bash(python3:*)",
-      "Bash(pip:*)",
-      "Bash(pip3:*)",
-      "Bash(echo:*)",
-      "Bash(which:*)",
-      "Bash(pwd:*)",
-      "Bash(sort:*)",
-      "Bash(uniq:*)",
-      "Bash(sed:*)",
-      "Bash(awk:*)",
-      "Bash(tr:*)",
-      "Bash(cut:*)",
-      "Bash(xargs:*)",
-      "Bash(jq:*)",
-      "Bash(brew:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(nextdev:*)",
-      "Bash(worktree-bootstrap:*)",
-      "Bash(podman:*)",
-      "Bash(pnpm:*)",
-      "Bash(yarn:*)",
-      "Bash(bun:*)",
-      "Bash(op:*)",
-      "Bash(gh:*)",
-      "Bash(vercel:*)",
-      "Bash(vercel-wait-deploy:*)",
-      "Bash(cmux:*)",
+      "Bash",
       "WebFetch",
       "WebSearch"
-    ]
+    ],
+    "defaultMode": "acceptEdits"
   },
   "model": "sonnet",
-"enabledPlugins": {
+  "statusLine": {
+    "type": "command",
+    "command": "bash /Users/rickbowman/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
     "vercel-plugin@vercel": true,
     "vercel-cli@vercel": true,
-    "vercel@claude-plugins-official": true
+    "vercel@claude-plugins-official": true,
+    "obsidian@obsidian-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "obsidian-skills": {
+      "source": {
+        "source": "github",
+        "repo": "kepano/obsidian-skills"
+      },
+      "autoUpdate": true
+    }
   }
 }
