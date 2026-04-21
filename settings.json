@@ -13,7 +13,7 @@
   "model": "sonnet",
   "statusLine": {
     "type": "command",
-    "command": "bash /Users/rickbowman/.claude/statusline-command.sh"
+    "command": "bash /Users/rickbowman/claude-config/bin/statusline-command.sh"
   },
   "enabledPlugins": {
     "vercel-plugin@vercel": true,
