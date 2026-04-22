@@ -7,6 +7,23 @@ set -euo pipefail
 
 name="${1:-work-$(date +%Y%m%d-%H%M%S)}"
 
+echo "==> wtcc: starting worktree '$name'"
+
+# Check for claude-config updates
+config_repo="$HOME/claude-config"
+echo "--> checking claude-config for updates..."
+if git -C "$config_repo" fetch origin -q 2>/dev/null; then
+  behind=$(git -C "$config_repo" rev-list HEAD..origin/main --count 2>/dev/null || echo 0)
+  if [ "$behind" -gt 0 ]; then
+    echo "⚠️  claude-config is $behind commit(s) behind origin — run: cd $config_repo && git pull && ./bootstrap.sh"
+  else
+    echo "    claude-config is up to date"
+  fi
+else
+  echo "    could not reach origin, skipping update check"
+fi
+
+echo "--> fast-forwarding main..."
 wt-ff-main || exit 1
 
 # Determine default branch and repo root
@@ -17,8 +34,9 @@ repo_root=$(git rev-parse --show-toplevel)
 # Create worktree off main, at the same path claude --worktree would use
 worktree_path="$repo_root/.claude/worktrees/$name"
 mkdir -p "$repo_root/.claude/worktrees"
+echo "--> creating worktree at $worktree_path (branch: $name, base: $default_branch)..."
 git worktree add -b "$name" "$worktree_path" "$default_branch"
 
-echo "==> launching Claude Code in new worktree on branch: $name (based off $default_branch)"
+echo "--> launching Claude Code..."
 cd "$worktree_path"
 claude --permission-mode acceptEdits "/worktree-bootstrap"
