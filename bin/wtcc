@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
-# wtcc — fetch + fast-forward main, then launch Claude Code in a new worktree.
+# wtcc — fetch + fast-forward main, then launch Claude Code in a new worktree
+#        branched off main (not off whatever branch is currently checked out).
 # Usage: wtcc [name]  (defaults to work-YYYYMMDD-HHMMSS if omitted)
-#
-# Always generates a unique branch name so each invocation gets its own branch.
 
 set -euo pipefail
 
 name="${1:-work-$(date +%Y%m%d-%H%M%S)}"
 
 wt-ff-main || exit 1
-echo "==> launching Claude Code in new worktree on branch: $name"
-claude --worktree "$name" "/worktree-bootstrap"
+
+# Determine default branch and repo root
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+default_branch="${default_branch:-main}"
+repo_root=$(git rev-parse --show-toplevel)
+
+# Create worktree off main, at the same path claude --worktree would use
+worktree_path="$repo_root/.claude/worktrees/$name"
+mkdir -p "$repo_root/.claude/worktrees"
+git worktree add -b "$name" "$worktree_path" "$default_branch"
+
+echo "==> launching Claude Code in new worktree on branch: $name (based off $default_branch)"
+cd "$worktree_path"
+claude "/worktree-bootstrap"
