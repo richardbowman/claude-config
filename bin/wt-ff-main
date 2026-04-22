@@ -9,16 +9,31 @@ echo "==> fetching origin..." && git fetch origin || exit 1
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
 default_branch=${default_branch:-main}
 
-# Check if local main is behind origin/main
+# Check if local main is behind or diverged from origin/main
 behind=$(git rev-list "${default_branch}..origin/${default_branch}" --count 2>/dev/null)
+ahead=$(git rev-list "origin/${default_branch}..${default_branch}" --count 2>/dev/null)
+
+if [ "${ahead:-0}" -gt 0 ]; then
+  echo "!! local ${default_branch} has ${ahead} commit(s) not on origin/${default_branch}" >&2
+  echo "!! ${default_branch} should not have local commits — push or reset before creating a worktree" >&2
+  exit 1
+fi
+
 if [ "${behind:-0}" -gt 0 ]; then
   echo "==> fast-forwarding ${behind} commit(s) from origin/${default_branch}..."
-
-  # Advance the local branch ref directly — no checkout needed.
-  # This works even when main is checked out in another worktree.
-  if ! git branch -f "$default_branch" "origin/${default_branch}" 2>/dev/null; then
-    echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
-    exit 1
+  current_branch=$(git branch --show-current)
+  if [ "$current_branch" = "$default_branch" ]; then
+    # On main — use merge --ff-only (branch -f won't move a checked-out branch)
+    if ! git merge --ff-only "origin/${default_branch}" 2>&1; then
+      echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+      exit 1
+    fi
+  else
+    # On a different branch — advance the ref directly without a checkout
+    if ! git branch -f "$default_branch" "origin/${default_branch}" 2>/dev/null; then
+      echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+      exit 1
+    fi
   fi
 else
   echo "==> local ${default_branch} is up to date"
