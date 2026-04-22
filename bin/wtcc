@@ -21,4 +21,4 @@ git worktree add -b "$name" "$worktree_path" "$default_branch"
 
 echo "==> launching Claude Code in new worktree on branch: $name (based off $default_branch)"
 cd "$worktree_path"
-claude "/worktree-bootstrap"
+claude --permission-mode acceptEdits "/worktree-bootstrap"
