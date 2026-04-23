@@ -17,12 +17,14 @@ set -euo pipefail
 CWD="$PWD"
 SHA=""
 TIMEOUT=600
+TARGET=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cwd)      CWD="$2";     shift 2 ;;
     --sha)      SHA="$2";     shift 2 ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
+    --target)   TARGET="$2";  shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -60,8 +62,10 @@ echo "Waiting for deployment of $SHA in $CWD ..."
 # Step 1: Wait for the deployment to appear for this commit
 DEPLOY_URL=""
 while true; do
+  TARGET_PARAM=""
+  [[ -n "$TARGET" ]] && TARGET_PARAM="&target=$TARGET"
   DEPLOY_URL=$(curl -sf -H "Authorization: Bearer $TOKEN" \
-    "$API/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=production&limit=10" \
+    "$API/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID${TARGET_PARAM}&limit=20" \
     | jq -r --arg sha "$SHA" \
         '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' \
     | head -1 || true)
