@@ -6,3 +6,4 @@ https://github.com/kepano/obsidian-skills.git
 https://github.com/googleworkspace/cli
 https://github.com/bankrate-prototypes/bankrate-skills.git --skill bankrate-databricks --yes
 https://github.com/bankrate-prototypes/bankrate-skills.git --skill bankrate-design --yes
+mattpocock/skills --skill grill-me --yes
