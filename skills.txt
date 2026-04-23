@@ -1,7 +1,7 @@
-find-skills
+vercel-labs/skills --skill find-skills --yes
 awslabs/mcp --skill dsql --yes
-agent-browser
-remotion-best-practices
+vercel-labs/agent-browser --skill agent-browser --yes
+remotion-dev/skills --skill remotion-best-practices --yes
 https://github.com/kepano/obsidian-skills.git
 https://github.com/googleworkspace/cli
 https://github.com/bankrate-prototypes/bankrate-skills.git --skill bankrate-databricks --yes
