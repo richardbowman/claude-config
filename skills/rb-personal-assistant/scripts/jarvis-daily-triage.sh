@@ -27,7 +27,11 @@ REPORT_FILE="Jarvis Summaries/Triage-$(date +'%Y-%m-%d-%H-%M').md"
 
 # 3. Create individual file in Obsidian
 # Note: Obsidian must be open for the 'obsidian' command to work via the socket.
-$OBSIDIAN_BIN create path="$REPORT_FILE" content="# Triage Summary: $(date +'%Y-%m-%d %H:%M')\n\n$SUMMARY" overwrite open
+# We separate the clean summary from the mechanical logs to put the summary at the top.
+CLEAN_SUMMARY=$(echo "$SUMMARY" | sed -n '/###/,$p')
+MECHANICAL_LOGS=$(echo "$SUMMARY" | sed '/###/,$d')
+
+$OBSIDIAN_BIN create path="$REPORT_FILE" content="# Triage Summary: $(date +'%Y-%m-%d %H:%M')\n\n$CLEAN_SUMMARY\n\n---\n## Process Details & Logs\n\n$MECHANICAL_LOGS" overwrite open
 
 # 4. macOS Notification
 osascript -e "display notification \"Inbox triaged. Report saved to $REPORT_FILE.\" with title \"Jarvis\" subtitle \"Daily Triage Complete\""
