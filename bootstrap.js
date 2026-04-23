@@ -104,21 +104,34 @@ if (fs.existsSync(rulesSrc)) {
 const skillsTxt = path.join(REPO, 'skills.txt');
 if (fs.existsSync(skillsTxt)) {
   console.log('==> Checking third-party skills');
-  const names = fs.readFileSync(skillsTxt, 'utf8').split(/\r?\n/)
+  const entries = fs.readFileSync(skillsTxt, 'utf8').split(/\r?\n/)
     .map(l => l.split('#')[0].trim()).filter(Boolean);
+
+  // Derive the installed skill directory name from an entry line.
+  // If --skill <name> is present, that's the installed name; otherwise use
+  // the basename of the repo URL/shorthand (strip .git suffix).
+  function skillName(entry) {
+    const m = entry.match(/--skill\s+(\S+)/);
+    if (m) return m[1];
+    const src = entry.split(/\s+/)[0];
+    return path.basename(src).replace(/\.git$/, '');
+  }
+
   const missing = [];
-  for (const s of names) {
-    if (fs.existsSync(path.join(CLAUDE, 'skills', s)) || fs.existsSync(path.join(SKILLS_BASE, s))) {
-      console.log(`    ok      ${s}`);
+  for (const s of entries) {
+    const name = skillName(s);
+    if (fs.existsSync(path.join(CLAUDE, 'skills', name)) || fs.existsSync(path.join(SKILLS_BASE, name))) {
+      console.log(`    ok      ${name}`);
     } else {
-      console.log(`    missing ${s}`);
+      console.log(`    missing ${name}`);
       missing.push(s);
     }
   }
   if (missing.length) {
     for (const s of missing) {
       console.log(`==> Installing skill: ${s}`);
-      const r = spawnSync('npx', ['-y', 'skills', 'add', s], { stdio: 'inherit', shell: process.platform === 'win32' });
+      const args = s.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [s];
+      const r = spawnSync('npx', ['-y', 'skills', 'add', ...args], { stdio: 'inherit', shell: process.platform === 'win32' });
       if (r.status !== 0) console.log(`!! failed to install ${s}`);
     }
   }
