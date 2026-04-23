@@ -70,18 +70,26 @@ vercel ls --cwd $MAIN_REPO 2>&1 | grep "Production" | head -1 | awk '{print $3}'
 
 ---
 
-## Wait for a production deployment to go Ready
+## Wait for a deployment to go Ready
 
-Use after merging to main. Use the pre-built `vercel-wait-deploy` script — do NOT write an inline polling loop.
+Use after merging to main (production) or pushing a PR branch (preview). Use the pre-built `vercel-wait-deploy` script — do NOT write an inline polling loop.
 
 ```bash
+# Wait for production (after merging to main):
 vercel-wait-deploy --cwd $MAIN_REPO
+
+# Wait for a specific SHA (e.g., a PR preview):
+vercel-wait-deploy --cwd $MAIN_REPO --sha <commit-sha>
+
+# Narrow to a specific target (optional):
+vercel-wait-deploy --cwd $MAIN_REPO --target preview
 ```
 
 Options:
 - `--cwd <dir>` — project root containing `.vercel/project.json` (required when in a worktree)
 - `--sha <sha>` — commit SHA to wait for (default: HEAD of `--cwd`)
 - `--timeout <secs>` — max wait time in seconds (default: 600)
+- `--target <target>` — `production` or `preview` (default: searches all targets by SHA)
 
 On success, prints the URL and writes it to `/tmp/vercel_prod_url.txt` for use in subsequent steps.
 
