@@ -7,7 +7,7 @@
 # Options:
 #   --cwd <dir>       Project directory (default: $PWD, used to resolve git repo)
 #   --sha <sha>       Git commit SHA to wait for (default: HEAD of --cwd)
-#   --target <env>    Environment filter substring, case-insensitive (default: production)
+#   --target <env>    Environment filter substring, case-insensitive (default: any)
 #   --timeout <secs>  Max seconds to wait (default: 600)
 #
 # Outputs the deployment URL on success; exits 1 on error or timeout.
@@ -18,7 +18,7 @@ set -euo pipefail
 CWD="$PWD"
 SHA=""
 TIMEOUT=600
-TARGET="production"
+TARGET=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,14 +47,20 @@ fi
 
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
 
-echo "Waiting for deployment of $SHA in $REPO (target: $TARGET) ..."
+TARGET_LABEL="${TARGET:-any}"
+echo "Waiting for deployment of $SHA in $REPO (target: $TARGET_LABEL) ..."
 
 # Step 1: Wait for a GitHub deployment to appear for this SHA + environment
 DEPLOY_ID=""
 while true; do
-  TARGET_LC=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')
+  if [[ -n "$TARGET" ]]; then
+    TARGET_LC=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')
+    JQ_FILTER="[.[] | select(.environment | ascii_downcase | contains(\"$TARGET_LC\"))] | .[0].id // empty"
+  else
+    JQ_FILTER=".[0].id // empty"
+  fi
   DEPLOY_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
-    --jq "[.[] | select(.environment | ascii_downcase | contains(\"$TARGET_LC\"))] | .[0].id // empty" \
+    --jq "$JQ_FILTER" \
     2>/dev/null || true)
 
   if [[ -n "$DEPLOY_ID" ]]; then
