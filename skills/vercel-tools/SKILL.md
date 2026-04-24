@@ -178,9 +178,24 @@ vercel logs dpl_abc123 --no-follow --json | jq '.message'
 
 ---
 
+## Adding env vars via CLI
+
+Use `printf '%s'` instead of `echo` to avoid a trailing newline being stored in the value — a newline in the value causes `403 Forbidden` errors at runtime:
+
+```bash
+# Correct — no trailing newline:
+printf '%s' "$MY_SECRET" | vercel env add MY_SECRET production
+
+# Wrong — echo appends \n which gets stored in the value:
+echo "$MY_SECRET" | vercel env add MY_SECRET production
+```
+
+---
+
 ## Common gotchas
 
 - **`vercel ls` output goes to stderr** — always use `2>&1`
+- **Env var trailing newline** — always use `printf '%s'` (not `echo`) when piping values to `vercel env add`; a stored newline causes `403 Forbidden` at runtime
 - **Preview deployments are behind Vercel SSO** — plain `curl` gets an HTML login page; always use `vercel curl --deployment`
 - **Migration errors don't block recording** — if a migration has `✗` lines, it's still marked applied; write a follow-up fix migration rather than re-running
 - **DSQL: no `ADD COLUMN NOT NULL DEFAULT`** — split into nullable `ADD COLUMN` + `UPDATE ... WHERE col IS NULL` backfill
