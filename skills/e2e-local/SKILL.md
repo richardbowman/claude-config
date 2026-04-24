@@ -76,16 +76,26 @@ nextdev logs -n 30
 
 ## Step 3 — run the tests
 
-Run via `npx` to avoid the `dotenv: command not found` failure that occurs when `pnpm test:e2e` tries to shell out to a `dotenv` binary that isn't in PATH in a worktree:
+Run via `npx` to avoid the `dotenv: command not found` failure that occurs when `pnpm test:e2e` tries to shell out to a `dotenv` binary that isn't in PATH in a worktree.
+
+**Always redirect output to a file in the project directory** — do NOT capture Playwright output as task/shell output. Playwright's output can be very large and writing it to `/tmp` can cause `ENOSPC` failures when the temp filesystem is low on space.
 
 ```sh
-# ✅ Reliable — works even when dotenv isn't in PATH
-npx dotenv-cli -e .env.e2e -- npx playwright test
+# ✅ Correct — write output to project dir, then read it back
+mkdir -p test-results
+npx dotenv-cli -e .env.e2e -- npx playwright test --reporter=line > test-results/pw-run.log 2>&1; echo "exit:$?"
 
-# Run a subset by file or grep:
-npx dotenv-cli -e .env.e2e -- npx playwright test e2e/tests/02-estate.spec.ts
-npx dotenv-cli -e .env.e2e -- npx playwright test --grep "some test name"
+# Then read results:
+# Read test-results/pw-run.log
 ```
+
+```sh
+# Run a subset by file or grep:
+npx dotenv-cli -e .env.e2e -- npx playwright test e2e/tests/02-estate.spec.ts --reporter=line > test-results/pw-run.log 2>&1; echo "exit:$?"
+npx dotenv-cli -e .env.e2e -- npx playwright test --grep "some test name" --reporter=line > test-results/pw-run.log 2>&1; echo "exit:$?"
+```
+
+> **Why redirect to a file?** Playwright output (especially with traces/screenshots) can exceed what `/tmp` can hold, triggering `ENOSPC: no space left on device`. Writing to `test-results/` in the project directory avoids this. The `echo "exit:$?"` prints the exit code after redirection so you can tell pass/fail.
 
 > **Why not `pnpm test:e2e`?** The npm script is `dotenv -e .env.e2e -- playwright test`. In a worktree, `dotenv` (the CLI wrapper installed as a dev dependency) isn't surfaced into PATH by pnpm. `npx dotenv-cli` installs it on demand and always works.
 
@@ -106,8 +116,9 @@ worktree-bootstrap
 # 2. Create .env.e2e if missing (copy secrets from .env.local, point to local Postgres)
 #    … see Step 1 above
 
-# 3. Run tests
-pnpm test:e2e
+# 3. Run tests (write output to project dir, then Read test-results/pw-run.log)
+mkdir -p test-results
+npx dotenv-cli -e .env.e2e -- npx playwright test --reporter=line > test-results/pw-run.log 2>&1; echo "exit:$?"
 ```
 
 ## Step 1 — derive the correct DATABASE_URL and PLAYWRIGHT_BASE_URL

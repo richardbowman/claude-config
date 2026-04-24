@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/home/rickbowman/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-04-23T00:29:38.415Z"
+    "lastUpdated": "2026-04-24T11:51:16.289Z"
   },
   "vercel": {
     "source": {
@@ -13,7 +13,7 @@
       "repo": "vercel/vercel-plugin"
     },
     "installLocation": "/home/rickbowman/.claude/plugins/marketplaces/vercel",
-    "lastUpdated": "2026-04-22T16:30:52.051Z"
+    "lastUpdated": "2026-04-24T11:43:59.033Z"
   },
   "obsidian-skills": {
     "source": {
@@ -21,7 +21,7 @@
       "repo": "kepano/obsidian-skills"
     },
     "installLocation": "/Users/rbowman/.claude/plugins/marketplaces/obsidian-skills",
-    "lastUpdated": "2026-04-23T00:04:50.925Z",
+    "lastUpdated": "2026-04-24T11:51:08.305Z",
     "autoUpdate": true
   }
 }
