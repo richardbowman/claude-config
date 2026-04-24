@@ -32,6 +32,9 @@ done
 
 if [[ -z "$SHA" ]]; then
   SHA=$(git -C "$CWD" rev-parse HEAD)
+else
+  # Expand short SHAs to full 40-char; also validates the SHA exists locally
+  SHA=$(git -C "$CWD" rev-parse "$SHA" 2>/dev/null || echo "$SHA")
 fi
 
 # Derive GitHub repo (owner/repo) from the git remote of $CWD
