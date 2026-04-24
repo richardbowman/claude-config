@@ -30,6 +30,11 @@ const { spawn, spawnSync } = require('node:child_process');
 const VERSION = '0.2.0';
 const IS_WIN = process.platform === 'win32';
 
+// Max log size before rotation. Override with NEXTDEV_MAX_LOG_MB env var.
+const MAX_LOG_BYTES = (process.env.NEXTDEV_MAX_LOG_MB
+  ? Number(process.env.NEXTDEV_MAX_LOG_MB)
+  : 100) * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // Paths + state
 // ---------------------------------------------------------------------------
@@ -244,6 +249,13 @@ async function cmdStart(argv) {
   fs.closeSync(logFd);
   writeField(dir, 'pid', String(child.pid));
 
+  // Spawn log rotation watcher (detached, self-exits when dev server dies)
+  const watcher = spawn(process.execPath, [
+    __filename, '__watch-log',
+    logPath, String(MAX_LOG_BYTES), path.join(dir, 'pid'),
+  ], { detached: true, stdio: 'ignore' });
+  watcher.unref();
+
   await sleep(200);
   if (!pidAlive(child.pid)) {
     warn(`process exited immediately — check ${logPath}`);
@@ -298,14 +310,22 @@ function cmdStatus() {
   }
   const pid = Number(readField(dir, 'pid'));
   const state = pid && looksLikeDev(pid) ? 'running' : 'stopped';
+  let logSize = '—';
+  try {
+    const bytes = fs.statSync(path.join(dir, 'dev.log')).size;
+    logSize = bytes > 1e9 ? `${(bytes / 1e9).toFixed(1)}GB ⚠` :
+              bytes > 1e6 ? `${(bytes / 1e6).toFixed(1)}MB` :
+                            `${Math.round(bytes / 1e3)}KB`;
+  } catch {}
   const rows = [
-    ['state',   state],
-    ['cwd',     readField(dir, 'cwd')],
-    ['pid',     pid || '—'],
-    ['port',    readField(dir, 'port') || '—'],
-    ['cmd',     readField(dir, 'command') || '—'],
-    ['started', readField(dir, 'started_at') || '—'],
-    ['logs',    path.join(dir, 'dev.log')],
+    ['state',    state],
+    ['cwd',      readField(dir, 'cwd')],
+    ['pid',      pid || '—'],
+    ['port',     readField(dir, 'port') || '—'],
+    ['cmd',      readField(dir, 'command') || '—'],
+    ['started',  readField(dir, 'started_at') || '—'],
+    ['log size', logSize],
+    ['logs',     path.join(dir, 'dev.log')],
   ];
   for (const [k, v] of rows) console.log(`${(k + ':').padEnd(9)} ${v}`);
 }
@@ -381,6 +401,44 @@ function cmdDoctor() {
   }
 }
 
+// Internal: spawned as a detached child to rotate logs for a running instance.
+// argv: logPath maxBytes pidFile
+function cmdWatchLog(argv) {
+  const [logPath, maxBytesStr, pidFile] = argv;
+  const maxBytes = Number(maxBytesStr) || MAX_LOG_BYTES;
+  const KEEP_BYTES = 512 * 1024; // keep last 512 KB after rotation
+
+  function rotate() {
+    try {
+      const size = fs.statSync(logPath).size;
+      if (size <= maxBytes) return;
+      // Read tail, truncate, write header + tail.
+      // Child uses O_APPEND so its next write goes to new EOF — safe on Linux/macOS.
+      const fd = fs.openSync(logPath, 'r+');
+      const buf = Buffer.alloc(KEEP_BYTES);
+      const bytesRead = fs.readSync(fd, buf, 0, KEEP_BYTES, Math.max(0, size - KEEP_BYTES));
+      const header = Buffer.from(
+        `\n[nextdev: log rotated at ${new Date().toISOString()}, discarded ${Math.round(size / 1e6)}MB]\n`
+      );
+      fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, header, 0, header.length, 0);
+      fs.writeSync(fd, buf, 0, bytesRead, header.length);
+      fs.closeSync(fd);
+    } catch { /* log may not exist yet or already gone */ }
+  }
+
+  function checkAlive() {
+    try {
+      const pid = parseInt(fs.readFileSync(pidFile, 'utf8'));
+      if (isNaN(pid)) return process.exit(0);
+      process.kill(pid, 0); // throws ESRCH if dead
+    } catch { process.exit(0); }
+  }
+
+  setInterval(rotate, 30_000);    // check log size every 30s
+  setInterval(checkAlive, 60_000); // exit when dev server dies
+}
+
 function printHelp() {
   const src = fs.readFileSync(__filename, 'utf8').split('\n');
   const header = [];
@@ -407,8 +465,9 @@ function printHelp() {
       case 'list':
       case 'ls':      cmdList(); break;
       case 'logs':    cmdLogs(rest); break;
-      case 'clean':   cmdClean(); break;
-      case 'doctor':  cmdDoctor(); break;
+      case 'clean':        cmdClean(); break;
+      case 'doctor':       cmdDoctor(); break;
+      case '__watch-log':  cmdWatchLog(rest); break;
       case '-v':
       case '--version': console.log(`nextdev ${VERSION}`); break;
       case undefined:
