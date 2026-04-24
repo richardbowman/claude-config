@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# vercel-wait-deploy — wait for the production Vercel deployment for the
-# current git HEAD (or a given SHA) to reach Ready or Error.
+# vercel-wait-deploy — wait for the Vercel deployment for a given commit SHA
+# to reach success or failure, using the GitHub Deployments API via `gh`.
 #
-# Usage: vercel-wait-deploy [--cwd <dir>] [--sha <commit-sha>] [--timeout <seconds>]
+# Usage: vercel-wait-deploy [--cwd <dir>] [--sha <commit-sha>] [--target <env>] [--timeout <seconds>]
 #
 # Options:
-#   --cwd <dir>       Project directory containing .vercel/project.json (default: $PWD)
+#   --cwd <dir>       Project directory (default: $PWD, used to resolve git repo)
 #   --sha <sha>       Git commit SHA to wait for (default: HEAD of --cwd)
+#   --target <env>    Environment filter substring, case-insensitive (default: production)
 #   --timeout <secs>  Max seconds to wait (default: 600)
 #
-# Outputs the production URL on success; exits 1 on error or timeout.
+# Outputs the deployment URL on success; exits 1 on error or timeout.
 # Writes the URL to /tmp/vercel_prod_url.txt on success for subsequent steps.
 
 set -euo pipefail
@@ -17,7 +18,7 @@ set -euo pipefail
 CWD="$PWD"
 SHA=""
 TIMEOUT=600
-TARGET=""
+TARGET="production"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,49 +30,32 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PROJECT_JSON="$CWD/.vercel/project.json"
-if [[ ! -f "$PROJECT_JSON" ]]; then
-  echo "Error: $PROJECT_JSON not found. Run 'vercel link' in $CWD first." >&2
-  exit 1
-fi
-
-TEAM_ID=$(jq -r .orgId     "$PROJECT_JSON")
-PROJECT_ID=$(jq -r .projectId "$PROJECT_JSON")
-
 if [[ -z "$SHA" ]]; then
   SHA=$(git -C "$CWD" rev-parse HEAD)
 fi
 
-TOKEN="${VERCEL_TOKEN:-}"
-if [[ -z "$TOKEN" ]]; then
-  AUTH_FILE="$HOME/Library/Application Support/com.vercel.cli/auth.json"
-  if [[ -f "$AUTH_FILE" ]]; then
-    TOKEN=$(jq -r .token "$AUTH_FILE" 2>/dev/null || true)
-  fi
-fi
-if [[ -z "$TOKEN" ]]; then
-  echo "Error: no Vercel token — set VERCEL_TOKEN or run 'vercel login'." >&2
+# Derive GitHub repo (owner/repo) from the git remote of $CWD
+REPO=$(git -C "$CWD" remote get-url origin \
+  | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+if [[ -z "$REPO" ]]; then
+  echo "Error: could not determine GitHub repo from $CWD remote." >&2
   exit 1
 fi
 
-API="https://api.vercel.com"
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
 
-echo "Waiting for deployment of $SHA in $CWD ..."
+echo "Waiting for deployment of $SHA in $REPO (target: $TARGET) ..."
 
-# Step 1: Wait for the deployment to appear for this commit
-DEPLOY_URL=""
+# Step 1: Wait for a GitHub deployment to appear for this SHA + environment
+DEPLOY_ID=""
 while true; do
-  TARGET_PARAM=""
-  [[ -n "$TARGET" ]] && TARGET_PARAM="&target=$TARGET"
-  DEPLOY_URL=$(curl -sf -H "Authorization: Bearer $TOKEN" \
-    "$API/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID${TARGET_PARAM}&limit=20" \
-    | jq -r --arg sha "$SHA" \
-        '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' \
-    | head -1 || true)
+  TARGET_LC=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')
+  DEPLOY_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
+    --jq "[.[] | select(.environment | ascii_downcase | contains(\"$TARGET_LC\"))] | .[0].id // empty" \
+    2>/dev/null || true)
 
-  if [[ -n "$DEPLOY_URL" ]]; then
-    echo "Found deployment: $DEPLOY_URL"
+  if [[ -n "$DEPLOY_ID" ]]; then
+    echo "Found deployment: $DEPLOY_ID"
     break
   fi
 
@@ -84,21 +68,24 @@ while true; do
   sleep 10
 done
 
-# Step 2: Poll until Ready or Error
+# Step 2: Poll deployment statuses until success/failure
 while true; do
-  STATUS=$(curl -sf -H "Authorization: Bearer $TOKEN" \
-    "$API/v13/deployments/$DEPLOY_URL?teamId=$TEAM_ID" \
-    | jq -r '.readyState // "UNKNOWN"' || echo "UNKNOWN")
+  READ=$(gh api "repos/$REPO/deployments/$DEPLOY_ID/statuses?per_page=1" \
+    --jq '.[0] | {state: .state, url: (.environment_url // .target_url // "")}' \
+    2>/dev/null || echo '{"state":"unknown","url":""}')
+
+  STATUS=$(echo "$READ" | jq -r '.state')
+  DEPLOY_URL=$(echo "$READ" | jq -r '.url')
 
   echo "  status: $STATUS"
 
-  if [[ "$STATUS" == "READY" ]]; then
-    echo "Production deployment ready: https://$DEPLOY_URL"
-    echo "https://$DEPLOY_URL" > /tmp/vercel_prod_url.txt
+  if [[ "$STATUS" == "success" ]]; then
+    echo "Deployment ready: $DEPLOY_URL"
+    echo "$DEPLOY_URL" > /tmp/vercel_prod_url.txt
     exit 0
   fi
 
-  if [[ "$STATUS" == "ERROR" || "$STATUS" == "CANCELED" ]]; then
+  if [[ "$STATUS" == "failure" || "$STATUS" == "error" ]]; then
     echo "Deployment failed with status: $STATUS" >&2
     exit 1
   fi
