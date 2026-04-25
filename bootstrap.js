@@ -137,5 +137,27 @@ if (fs.existsSync(skillsTxt)) {
   }
 }
 
+const dotfilesSrc = path.join(REPO, 'dotfiles');
+if (fs.existsSync(dotfilesSrc)) {
+  console.log('==> Linking dotfiles');
+  const configDir = path.join(HOME, '.config');
+  fs.mkdirSync(configDir, { recursive: true });
+  function linkDotfiles(srcDir, dstDir) {
+    fs.mkdirSync(dstDir, { recursive: true });
+    for (const name of fs.readdirSync(srcDir)) {
+      const src = path.join(srcDir, name);
+      const dst = path.join(dstDir, name);
+      if (fs.statSync(src).isDirectory()) {
+        linkDotfiles(src, dst);
+      } else {
+        link(src, dst);
+      }
+    }
+  }
+  for (const name of fs.readdirSync(dotfilesSrc)) {
+    linkDotfiles(path.join(dotfilesSrc, name), path.join(configDir, name));
+  }
+}
+
 console.log('==> Done');
 console.log(`    Review machine-specific overrides in: ${path.join(CLAUDE, 'settings.local.json')}`);
