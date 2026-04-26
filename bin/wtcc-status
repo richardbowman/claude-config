@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# wtcc-status — list all cmux workspaces with their current working directory and description
+
+cmux rpc workspace.list 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for ws in sorted(data.get('workspaces', []), key=lambda w: w.get('index', 99)):
+    ref    = ws.get('ref', '')
+    title  = ws.get('title', '').strip()
+    cwd    = ws.get('current_directory', '')
+    desc   = ws.get('description') or ''
+    sel    = ' [selected]' if ws.get('selected') else ''
+    print(f'{ref}{sel}  {title}')
+    if cwd:  print(f'  cwd:  {cwd}')
+    if desc: print(f'  desc: {desc}')
+"
