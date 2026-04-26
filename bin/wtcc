@@ -37,6 +37,10 @@ mkdir -p "$repo_root/.claude/worktrees"
 echo "--> creating worktree at $worktree_path (branch: $name, base: $default_branch)..."
 git worktree add -b "$name" "$worktree_path" "$default_branch"
 
+echo "--> tagging cmux workspace..."
+cmux workspace-action rename --title "$name" 2>/dev/null || true
+cmux workspace-action set-description --description "$worktree_path" 2>/dev/null || true
+
 echo "--> launching Claude Code..."
 cd "$worktree_path"
 claude --permission-mode acceptEdits "/worktree-bootstrap"
