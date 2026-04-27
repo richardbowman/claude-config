@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# wtcc-recover — reopen all active worktree workspaces in cmux after a crash
+
+set -euo pipefail
+
+worktrees=$(cmux rpc workspace.list 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for ws in data.get('workspaces', []):
+    cwd = ws.get('current_directory', '')
+    if '.claude/worktrees/' in cwd:
+        name = cwd.rstrip('/').split('/')[-1]
+        print(f'{cwd}\t{name}')
+")
+
+if [ -z "$worktrees" ]; then
+  echo "No worktree workspaces found in cmux — nothing to recover."
+  exit 0
+fi
+
+count=0
+while IFS=$'\t' read -r cwd name; do
+  echo "--> opening $name ($cwd)"
+  cmux new-workspace \
+    --cwd "$cwd" \
+    --name "$name" \
+    --description "$cwd" \
+    --command "claude --permission-mode acceptEdits"
+  count=$((count + 1))
+done <<< "$worktrees"
+
+echo ""
+echo "Opened $count workspace(s). Type /resume in each to pick up where you left off."
