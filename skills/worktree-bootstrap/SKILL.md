@@ -114,6 +114,27 @@ echo 'DATABASE_URL="postgres://postgres:postgres@localhost:5432/myproject?sslmod
 nextdev start
 ```
 
+## cmux tab management
+
+`wtcc` automatically tags the cmux workspace on launch:
+- Tab **title** → branch name
+- Tab **description** → full worktree path
+
+Two companion commands live in `~/claude-config/bin/`:
+
+**`wtcc-status`** — list all cmux workspaces with their current working directory:
+```sh
+wtcc-status
+```
+
+**`wtcc-recover`** — after a cmux crash, reopen all worktree tabs at once with Claude already launching:
+```sh
+wtcc-recover
+# then type /resume in each tab to continue
+```
+
+`wtcc-recover` reads live cmux workspace state via `cmux rpc workspace.list` and opens a new tab for every workspace whose `current_directory` contains `.claude/worktrees/`. Non-worktree tabs are ignored.
+
 ## Creating worktrees safely
 
 Use the `wtadd` shell function (in `~/.zshrc`) instead of bare `git worktree add`. It fetches origin, fast-forwards local main if behind, then creates the worktree — so the base is always current.
