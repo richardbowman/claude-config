@@ -10,16 +10,14 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "sonnet",
+  "model": "us.anthropic.claude-sonnet-4-6",
   "statusLine": {
     "type": "command",
-    "command": "bash /Users/rickbowman/claude-config/bin/statusline-command.sh"
+    "command": "bash $HOME/claude-config/bin/statusline-command.sh"
   },
   "enabledPlugins": {
-    "vercel-plugin@vercel": true,
-    "vercel-cli@vercel": true,
-    "vercel@claude-plugins-official": true,
-    "obsidian@obsidian-skills": true
+    "obsidian@obsidian-skills": true,
+    "vercel-plugin@vercel": true
   },
   "extraKnownMarketplaces": {
     "obsidian-skills": {

@@ -5,10 +5,10 @@ description: Vercel CLI recipes for this project — checking migration status, 
 
 # Vercel Tools
 
-All commands run from the main repo root. The project cwd flag (`--cwd /Users/rickbowman/projects/golden-wealth-app`) is required for `vercel` commands when working inside a worktree — the Vercel link only exists in the main checkout.
+All commands run from the main repo root. The project cwd flag (`--cwd $HOME/projects/golden-wealth-app`) is required for `vercel` commands when working inside a worktree — the Vercel link only exists in the main checkout.
 
 ```bash
-MAIN_REPO=/Users/rickbowman/projects/golden-wealth-app
+MAIN_REPO=$HOME/projects/golden-wealth-app
 SECRET=$(grep MIGRATION_SECRET $MAIN_REPO/.env.local | cut -d= -f2 | tr -d '"')
 ```
 
@@ -175,6 +175,37 @@ vercel logs dpl_abc123 --no-follow --json | jq '.message'
 | `--query <str>` | Substring filter |
 | `--json` | Machine-readable; pipe to `jq` |
 | `--since <duration>` | e.g. `--since 1h` or `--since 2024-01-15` |
+
+---
+
+## Secrets workflow: Password Manager → Vercel
+
+Always fetch secrets from the project's password manager rather than guessing or relying on `.env.local` (which may be stale or empty for encrypted vars). Check project memory for which password manager applies — work projects use Keeper, personal projects use 1Password.
+
+**Keeper (work projects):**
+```bash
+keeper list
+keeper search "myproject"
+keeper add --title "MyProject MY_SECRET" --pass "$(openssl rand -hex 32)" --notes "MY_SECRET for <project>"
+SECRET=$(keeper get <record-uid> --format password)
+```
+
+**1Password (personal projects):**
+```bash
+op item list --vault <vault>
+op item get "MyProject MY_SECRET" --fields password
+SECRET=$(op item get "MyProject MY_SECRET" --fields password)
+```
+
+**Full new-secret workflow:**
+1. Generate + store in password manager (commands above)
+2. Push to Vercel production: `vercel env add MY_SECRET production --value "$SECRET" --yes --cwd $MAIN_REPO`
+3. Push to Vercel preview branch: `vercel env add MY_SECRET preview <branch> --value "$SECRET" --yes --cwd $MAIN_REPO`
+4. Write to `.env.local`: `grep -v '^MY_SECRET=' .env.local > /tmp/e && mv /tmp/e .env.local && echo 'MY_SECRET="'"$SECRET"'"' >> .env.local`
+
+**Setting same value on production + preview:** CLI requires two calls — no "all environments" shorthand in non-interactive mode. For preview, a branch name is required with `--yes`; omit `--yes` to apply to all preview branches interactively. Add `--force` to overwrite existing values.
+
+**New env var not live until redeployed** — existing deployments don't pick up new env vars; `vercel redeploy <url> --cwd $MAIN_REPO` or push a new commit.
 
 ---
 

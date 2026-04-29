@@ -9,7 +9,7 @@ PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # Configuration
 GEMINI_BIN="/opt/homebrew/bin/gemini"
 OBSIDIAN_BIN="/opt/homebrew/bin/obsidian"
-LOG_FILE="/Users/rickbowman/.gemini/tmp/jarvis-triage.log"
+LOG_FILE="$HOME/.gemini/tmp/jarvis-triage.log"
 
 # 1. Run Gemini Triage
 echo "--- Starting Jarvis triage at $(date) ---" >> "$LOG_FILE"
