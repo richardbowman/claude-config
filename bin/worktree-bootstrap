@@ -93,15 +93,13 @@ function detectPM(dir) {
   return null;
 }
 
-if (!fs.existsSync(path.join(toplevel, 'node_modules'))) {
-  const pm = detectPM(toplevel);
-  if (!pm) die('no package.json/lockfile in worktree');
-  log(`installing deps: ${pm[0]} ${pm[1].join(' ')}`);
-  const r = spawnSync(pm[0], pm[1], { cwd: toplevel, stdio: 'inherit', shell: process.platform === 'win32' });
-  if (r.status !== 0) die(`${pm[0]} install failed`);
-} else {
-  log('node_modules present — skipping install');
-}
+const pm = detectPM(toplevel);
+if (!pm) die('no package.json/lockfile in worktree');
+// Always run install — even when node_modules exists, the branch may have added
+// new packages not yet installed (e.g. a dependency added on this branch).
+log(`installing deps: ${pm[0]} ${pm[1].join(' ')}`);
+const r = spawnSync(pm[0], pm[1], { cwd: toplevel, stdio: 'inherit', shell: process.platform === 'win32' });
+if (r.status !== 0) die(`${pm[0]} install failed`);
 
 // ---------------------------------------------------------------------------
 // 3. Copy .env.local from main
@@ -178,23 +176,37 @@ if (!hasCmd('podman')) {
 // 6. Write DATABASE_URL + PGSSLMODE into .env.local
 // ---------------------------------------------------------------------------
 
-if (pgUrl && fs.existsSync(envDst)) {
+if (fs.existsSync(envDst)) {
   let envContent = fs.readFileSync(envDst, 'utf8');
-  // Replace existing DATABASE_URL line if present, otherwise append
-  if (/^DATABASE_URL=/m.test(envContent)) {
-    envContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${pgUrl}`);
-    log('updated DATABASE_URL in .env.local');
-  } else {
-    envContent += `\nDATABASE_URL=${pgUrl}\n`;
-    log('wrote DATABASE_URL to .env.local');
+  let changed = false;
+
+  if (pgUrl) {
+    // Replace existing DATABASE_URL line if present, otherwise append
+    if (/^DATABASE_URL=/m.test(envContent)) {
+      envContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${pgUrl}`);
+      log('updated DATABASE_URL in .env.local');
+    } else {
+      envContent += `\nDATABASE_URL=${pgUrl}\n`;
+      log('wrote DATABASE_URL to .env.local');
+    }
+    // Ensure PGSSLMODE doesn't conflict (DSQL sets require; local postgres needs disable)
+    if (/^PGSSLMODE=/m.test(envContent)) {
+      envContent = envContent.replace(/^PGSSLMODE=.*$/m, 'PGSSLMODE=disable');
+    } else {
+      envContent += 'PGSSLMODE=disable\n';
+    }
+    changed = true;
   }
-  // Ensure PGSSLMODE doesn't conflict (DSQL sets require; local postgres needs disable)
-  if (/^PGSSLMODE=/m.test(envContent)) {
-    envContent = envContent.replace(/^PGSSLMODE=.*$/m, 'PGSSLMODE=disable');
-  } else {
-    envContent += 'PGSSLMODE=disable\n';
+
+  // VERCEL_ENV=preview|production makes isDeployed=true in auth.ts, which throws
+  // when NODE_ENV=development (mock auth guard). Clear it for local dev.
+  if (/^VERCEL_ENV=(preview|production)/m.test(envContent)) {
+    envContent = envContent.replace(/^VERCEL_ENV=.*$/m, 'VERCEL_ENV=');
+    log('cleared VERCEL_ENV (was preview/production — would break mock auth)');
+    changed = true;
   }
-  fs.writeFileSync(envDst, envContent);
+
+  if (changed) fs.writeFileSync(envDst, envContent);
 }
 
 // ---------------------------------------------------------------------------

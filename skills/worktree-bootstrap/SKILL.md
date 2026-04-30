@@ -26,12 +26,12 @@ One command, idempotent. Re-running is safe — install and .env.local copy both
 
 1. **Verify worktree** — uses `git rev-parse --git-dir` vs `--git-common-dir`; errors if run from the main checkout.
 1b. **Staleness check** — runs `git fetch origin --quiet` then counts commits between the worktree's `HEAD` and `origin/main` (or the repo's default branch). If behind, emits a warning with the commit count and suggests deleting the worktree, pulling main, and re-creating with `wtadd`. Does not abort — you may have already done work — but the warning is loud.
-2. **Install deps** — detects package manager from lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock*`, else `package.json`+`npm ci`) and runs a frozen-lockfile install. Skipped if `node_modules/` already exists.
+2. **Install deps** — detects package manager from lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock*`, else `package.json`+`npm ci`) and runs a frozen-lockfile install. Always runs — even if `node_modules/` exists — so branches with newly added packages get resolved correctly.
 3. **Copy `.env.local`** from `<mainRepo>/.env.local` to `<worktree>/.env.local`. Skipped if the worktree already has one.
 4. **Start Podman Postgres** — finds a container matching `*-pg` whose image name contains `postgres|pgvector|postgis`. If multiple, prefers one whose name matches the main repo's basename. `podman start` if stopped.
 5. **Derive `DATABASE_URL`** from the container's env (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) and port mapping — `postgres://<user>:<pass>@localhost:<hostPort>/<db>?sslmode=disable`. The `sslmode=disable` suffix is always appended — local Podman Postgres containers don't have SSL configured and Prisma will throw "The server does not support SSL connections" without it.
 6. **Write `DATABASE_URL` to `.env.local`** in the worktree, overwriting any existing `DATABASE_URL` line. This ensures `prisma.config.ts` sees the local connection string and skips the DSQL token provider, and the value persists across server restarts.
-7. **Done.** Use the `nextjs-local-dev` skill to start the dev server (`nextdev start`).
+7. **Done.** Report what was done (deps installed, .env.local copied, Postgres started, DATABASE_URL written) and stop. Do not suggest next steps, plan work, or infer tasks from the branch name. Wait for the user's instructions.
 
 ## The prisma.config.ts short-circuit pattern
 
