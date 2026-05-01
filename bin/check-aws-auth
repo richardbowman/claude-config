@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Blocks Claude from starting if AWS SSO session is not active.
+# Re-authenticate with: aws sso login
+
+if ! aws sts get-caller-identity --output text &>/dev/null; then
+  echo "ERROR: Not logged in to AWS (profile: ${AWS_PROFILE:-default})"
+  echo "Run: aws sso login"
+  exit 1
+fi
