@@ -88,6 +88,21 @@ if (fs.existsSync(skillsSrc)) {
     if (!fs.statSync(src).isDirectory()) continue;
     link(src, path.join(CLAUDE, 'skills', name));
   }
+
+  // Prune stale skill symlinks that pointed into this repo but were renamed/deleted.
+  const claudeSkillsDir = path.join(CLAUDE, 'skills');
+  for (const name of fs.readdirSync(claudeSkillsDir)) {
+    const dst = path.join(claudeSkillsDir, name);
+    let st;
+    try { st = fs.lstatSync(dst); } catch { continue; }
+    if (!st.isSymbolicLink()) continue;
+    const target = fs.readlinkSync(dst);
+    if (!target.startsWith(skillsSrc + path.sep)) continue;  // not ours
+    if (!fs.existsSync(target)) {
+      console.log(`    prune  ${dst} (dangling -> ${target})`);
+      fs.unlinkSync(dst);
+    }
+  }
 }
 
 const rulesSrc = path.join(REPO, 'rules');

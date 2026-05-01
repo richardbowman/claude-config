@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# wtclean — remove worktrees whose branches are merged or deleted on origin.
+# For each candidate: shows its status, prompts y/n, removes the worktree and
+# optionally deletes the local branch.
+# Usage: wtclean [--dry-run]
+
+set -euo pipefail
+
+dry_run=false
+if [ "${1:-}" = "--dry-run" ]; then
+  dry_run=true
+  echo "==> dry-run mode — no changes will be made"
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+default_branch="${default_branch:-main}"
+
+echo "==> fetching origin..."
+git fetch origin --prune
+
+removed=0
+skipped=0
+
+declare -a wt_paths=()
+declare -a wt_branches=()
+current_wt_path=""
+current_wt_branch=""
+
+while IFS= read -r line; do
+  if [[ "$line" == worktree\ * ]]; then
+    # Save previous block if it had a branch
+    if [ -n "$current_wt_path" ] && [ -n "$current_wt_branch" ]; then
+      wt_paths+=("$current_wt_path")
+      wt_branches+=("$current_wt_branch")
+    fi
+    current_wt_path="${line#worktree }"
+    current_wt_branch=""
+  elif [[ "$line" == branch\ * ]]; then
+    current_wt_branch="${line#branch refs/heads/}"
+  fi
+done < <(git worktree list --porcelain; echo "worktree __end__")
+# Flush last block
+if [ -n "$current_wt_path" ] && [ "$current_wt_path" != "__end__" ] && [ -n "$current_wt_branch" ]; then
+  wt_paths+=("$current_wt_path")
+  wt_branches+=("$current_wt_branch")
+fi
+
+for i in "${!wt_paths[@]}"; do
+  wt_path="${wt_paths[$i]}"
+  branch="${wt_branches[$i]}"
+
+  # Skip the main repo and the default branch worktree
+  if [ "$wt_path" = "$repo_root" ] || [ "$branch" = "$default_branch" ]; then
+    continue
+  fi
+
+  # Determine why this worktree might be stale
+  reason=""
+  if ! git show-ref --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null; then
+    reason="branch deleted on origin"
+  else
+    merge_base=$(git merge-base "$default_branch" "$branch" 2>/dev/null || true)
+    branch_tip=$(git rev-parse "$branch" 2>/dev/null || true)
+    if git branch -r --merged "origin/$default_branch" | grep -q "origin/$branch" 2>/dev/null; then
+      reason="merged into $default_branch on origin"
+    elif [ -n "$merge_base" ] && [ "$merge_base" = "$branch_tip" ]; then
+      reason="already fast-forwarded into $default_branch locally"
+    fi
+  fi
+
+  [ -z "$reason" ] && continue
+
+  echo ""
+  echo "  worktree: $wt_path"
+  echo "  branch:   $branch"
+  echo "  reason:   $reason"
+
+  if $dry_run; then
+    echo "  [dry-run] would prompt to remove"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  read -r -p "  Remove this worktree? [y/N] " answer </dev/tty
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    echo "  --> removing worktree..."
+    if ! git worktree remove --force "$wt_path" 2>/dev/null; then
+      # Untracked files prevent git worktree remove; nuke the directory and prune
+      rm -rf "$wt_path"
+      git worktree prune
+    fi
+
+    if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+      read -r -p "  --> also delete local branch '$branch'? [y/N] " del_branch </dev/tty
+      if [[ "$del_branch" =~ ^[Yy]$ ]]; then
+        git branch -D "$branch"
+        echo "  --> branch '$branch' deleted"
+      fi
+    fi
+
+    removed=$((removed + 1))
+  else
+    echo "  --> skipped"
+    skipped=$((skipped + 1))
+  fi
+done
+
+echo ""
+if $dry_run; then
+  echo "==> dry-run complete: $skipped candidate(s) found"
+else
+  echo "==> done: $removed removed, $skipped skipped"
+fi

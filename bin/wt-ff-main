@@ -29,8 +29,16 @@ if [ "${behind:-0}" -gt 0 ]; then
       exit 1
     fi
   else
-    # On a different branch — advance the ref directly without a checkout
-    if ! git branch -f "$default_branch" "origin/${default_branch}" 2>/dev/null; then
+    # On a different branch — advance the ref directly without a checkout.
+    # git branch -f fails if main is checked out in another worktree; detect that
+    # and fast-forward through that worktree instead.
+    wt_path=$(git worktree list --porcelain | awk '/^worktree /{wt=$2} /^branch refs\/heads\/'"$default_branch"'$/{print wt; exit}')
+    if [ -n "$wt_path" ]; then
+      if ! git -C "$wt_path" merge --ff-only "origin/${default_branch}" 2>&1; then
+        echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+        exit 1
+      fi
+    elif ! git branch -f "$default_branch" "origin/${default_branch}"; then
       echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
       exit 1
     fi
