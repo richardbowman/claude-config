@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# wtpr — list open PRs, pick which to open as worktrees with Claude Code in CMUX
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Error: not in a git repository" >&2
+  exit 1
+}
+
+echo "--> fetching origin..."
+git fetch origin -q
+
+echo "--> listing open PRs..."
+pr_json=$(gh pr list --json number,title,headRefName,author 2>/dev/null) || {
+  echo "Error: gh CLI not available or not authenticated" >&2
+  exit 1
+}
+
+pr_count=$(echo "$pr_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+if [ "$pr_count" = "0" ]; then
+  echo "No open PRs found."
+  exit 0
+fi
+
+# Build a tab-separated list: number TAB branch TAB author TAB title TAB status
+selection=$(echo "$pr_json" | python3 -c "
+import sys, json, os
+
+data = json.load(sys.stdin)
+repo_root = sys.argv[1]
+wt_base = os.path.join(repo_root, '.claude', 'worktrees')
+
+# Read currently registered worktree paths from git
+import subprocess
+result = subprocess.run(['git', 'worktree', 'list', '--porcelain'], capture_output=True, text=True)
+registered = set()
+for line in result.stdout.splitlines():
+    if line.startswith('worktree '):
+        registered.add(line[len('worktree '):])
+
+for pr in data:
+    branch = pr['headRefName']
+    safe   = branch.replace('/', '-')
+    path   = os.path.join(wt_base, safe)
+    status = '[open]' if path in registered else ''
+    author = pr.get('author', {}).get('login', '?')
+    print(f\"{pr['number']}\t{branch}\t{author}\t{pr['title']}\t{status}\")
+" "$repo_root")
+
+# Selection via fzf (multi) or numbered fallback
+if command -v fzf &>/dev/null; then
+  chosen=$(echo "$selection" | fzf --multi \
+    --delimiter=$'\t' \
+    --with-nth='1,2,3,4,5' \
+    --header="TAB to multi-select · ENTER to open · [open] = worktree exists" \
+    --prompt="PR> " \
+    --preview='gh pr view {1}' \
+    --preview-window='right:50%:wrap' \
+    || true)
+else
+  echo ""
+  lines=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && lines+=("$line")
+  done <<< "$selection"
+  for i in "${!lines[@]}"; do
+    IFS=$'\t' read -r num branch author title status <<< "${lines[$i]}"
+    printf "  %2d.  #%-5s  %-35s  %s  %s\n" "$((i+1))" "$num" "$branch" "$author" "$status"
+    printf "        %s\n" "$title"
+  done
+  echo ""
+  printf "Enter numbers to open (space-separated): "
+  read -r picks
+  chosen=""
+  for n in $picks; do
+    idx=$((n - 1))
+    if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#lines[@]}" ]; then
+      chosen+="${lines[$idx]}"$'\n'
+    fi
+  done
+fi
+
+[ -z "$chosen" ] && { echo "No PRs selected."; exit 0; }
+
+wt_base="$repo_root/.claude/worktrees"
+mkdir -p "$wt_base"
+
+count=0
+while IFS=$'\t' read -r pr_num branch author title status; do
+  [ -z "$pr_num" ] && continue
+
+  safe="${branch//\//-}"
+  wt_path="$wt_base/$safe"
+
+  if [ "$status" = "[open]" ]; then
+    echo "--> #$pr_num $branch — worktree already exists, opening new tab"
+  else
+    echo "--> #$pr_num $branch — creating worktree at $wt_path"
+    if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+      # Branch exists locally — fast-forward it to origin before creating worktree
+      git fetch origin "$branch:$branch" 2>/dev/null || true
+      git worktree add "$wt_path" "$branch"
+    else
+      git worktree add --track -b "$branch" "$wt_path" "origin/$branch"
+    fi
+  fi
+
+  echo "--> opening CMUX workspace for $branch"
+  cmux new-workspace \
+    --cwd "$wt_path" \
+    --name "$safe" \
+    --description "$wt_path" \
+    --command "claude --permission-mode acceptEdits /worktree-bootstrap"
+
+  count=$((count + 1))
+done <<< "$chosen"
+
+echo ""
+echo "Opened $count workspace(s)."

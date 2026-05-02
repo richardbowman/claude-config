@@ -135,6 +135,12 @@ wtcc-recover
 
 `wtcc-recover` reads live cmux workspace state via `cmux rpc workspace.list` and opens a new tab for every workspace whose `current_directory` contains `.claude/worktrees/`. Non-worktree tabs are ignored.
 
+**`wtpr`** — find open PRs from remote agents and open selected ones as worktrees in CMUX:
+```sh
+wtpr
+```
+Run from inside any git repo. Fetches origin, lists open PRs via `gh pr list`, and presents a multi-select menu (fzf if installed, numbered list otherwise). PRs that already have a local worktree are marked `[open]`. For each selection, creates a worktree at `.claude/worktrees/<branch>` (slashes in branch names replaced with `-`) and opens a CMUX workspace running `claude --permission-mode acceptEdits /worktree-bootstrap`.
+
 ## Creating worktrees safely
 
 Use the `wtadd` shell function (in `~/.zshrc`) instead of bare `git worktree add`. It fetches origin, fast-forwards local main if behind, then creates the worktree — so the base is always current.
