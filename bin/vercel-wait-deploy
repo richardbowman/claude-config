@@ -31,7 +31,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SHA" ]]; then
-  SHA=$(git -C "$CWD" rev-parse HEAD)
+  # Fetch so origin/HEAD reflects squash merges and other remote-only commits
+  git -C "$CWD" fetch origin --quiet 2>/dev/null || true
+  SHA=$(git -C "$CWD" rev-parse origin/HEAD 2>/dev/null || git -C "$CWD" rev-parse HEAD)
 else
   # Expand short SHAs to full 40-char; also validates the SHA exists locally
   SHA=$(git -C "$CWD" rev-parse "$SHA" 2>/dev/null || echo "$SHA")
@@ -89,8 +91,12 @@ while true; do
   echo "  status: $STATUS"
 
   if [[ "$STATUS" == "success" ]]; then
-    echo "Deployment ready: $DEPLOY_URL"
-    echo "$DEPLOY_URL" > /tmp/vercel_prod_url.txt
+    # Prefer the stable branch alias over the per-deploy hash URL
+    ALIAS_URL=$(vercel inspect "$DEPLOY_URL" --cwd "$CWD" 2>&1 \
+      | grep -o 'https://[^ ]*\.vercel\.app' | grep -v "$DEPLOY_URL" | head -1 || true)
+    OUTPUT_URL="${ALIAS_URL:-$DEPLOY_URL}"
+    echo "Deployment ready: $OUTPUT_URL"
+    echo "$OUTPUT_URL" > /tmp/vercel_prod_url.txt
     exit 0
   fi
 

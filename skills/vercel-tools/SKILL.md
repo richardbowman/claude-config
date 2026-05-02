@@ -91,7 +91,7 @@ Options:
 - `--timeout <secs>` — max wait time in seconds (default: 600)
 - `--target <target>` — `production` or `preview` (default: searches all targets by SHA)
 
-On success, prints the URL and writes it to `/tmp/vercel_prod_url.txt` for use in subsequent steps.
+On success, prints the stable **branch alias URL** (e.g. `https://v0-app-git-my-branch-team.vercel.app`) and writes it to `/tmp/vercel_prod_url.txt`. Falls back to the per-deploy hash URL if no alias is found.
 
 ---
 
