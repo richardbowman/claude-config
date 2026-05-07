@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# wt-ff-main — fetch origin and fast-forward local main if behind.
+# Used by wtadd and wtcc. Exits non-zero on failure with a clear message.
+
+set -euo pipefail
+
+echo "==> fetching origin..." && git fetch origin || exit 1
+
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+default_branch=${default_branch:-main}
+
+# Check if local main is behind or diverged from origin/main
+behind=$(git rev-list "${default_branch}..origin/${default_branch}" --count 2>/dev/null)
+ahead=$(git rev-list "origin/${default_branch}..${default_branch}" --count 2>/dev/null)
+
+if [ "${ahead:-0}" -gt 0 ]; then
+  echo "!! local ${default_branch} has ${ahead} commit(s) not on origin/${default_branch}" >&2
+  echo "!! ${default_branch} should not have local commits — push or reset before creating a worktree" >&2
+  exit 1
+fi
+
+if [ "${behind:-0}" -gt 0 ]; then
+  echo "==> fast-forwarding ${behind} commit(s) from origin/${default_branch}..."
+  current_branch=$(git branch --show-current)
+  if [ "$current_branch" = "$default_branch" ]; then
+    # On main — use merge --ff-only (branch -f won't move a checked-out branch)
+    if ! git merge --ff-only "origin/${default_branch}" 2>&1; then
+      echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+      exit 1
+    fi
+  else
+    # On a different branch — advance the ref directly without a checkout.
+    # git branch -f fails if main is checked out in another worktree; detect that
+    # and fast-forward through that worktree instead.
+    wt_path=$(git worktree list --porcelain | awk '/^worktree /{wt=$2} /^branch refs\/heads\/'"$default_branch"'$/{print wt; exit}')
+    if [ -n "$wt_path" ]; then
+      if ! git -C "$wt_path" merge --ff-only "origin/${default_branch}" 2>&1; then
+        echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+        exit 1
+      fi
+    elif ! git branch -f "$default_branch" "origin/${default_branch}"; then
+      echo "!! fast-forward failed — resolve divergence before creating a worktree" >&2
+      exit 1
+    fi
+  fi
+else
+  echo "==> local ${default_branch} is up to date"
+fi
+
+exit 0

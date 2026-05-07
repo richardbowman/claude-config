@@ -1,0 +1,7 @@
+*.backup.*
+.DS_Store
+plugins/installed_plugins.json
+.agents/
+.claude/
+dist/
+.gemini/

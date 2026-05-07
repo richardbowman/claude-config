@@ -1,0 +1,481 @@
+#!/usr/bin/env node
+// nextdev — scoped local dev-server manager.
+//
+// Each instance is keyed by its absolute cwd (resolved through symlinks,
+// so git worktrees get distinct identities). Commands only ever touch
+// processes this script started — never wildcard patterns.
+//
+// Commands:
+//   start    [--port N] [--pm npm|pnpm|yarn|bun] [--cmd "..."]
+//   stop     [--force]
+//   restart  [--port N] [--pm ...] [--cmd ...]
+//   status                # cwd instance only
+//   list                  # every registered instance
+//   logs     [-f] [-n N]
+//   clean                 # remove registrations whose pid is gone
+//   doctor                # environment checks
+//
+// Runs on Linux, macOS, and Windows (native or WSL). Zero npm deps —
+// Node stdlib only. Requires Node 18+.
+
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const net = require('node:net');
+const { spawn, spawnSync } = require('node:child_process');
+
+const VERSION = '0.2.0';
+const IS_WIN = process.platform === 'win32';
+
+// Max log size before rotation. Override with NEXTDEV_MAX_LOG_MB env var.
+const MAX_LOG_BYTES = (process.env.NEXTDEV_MAX_LOG_MB
+  ? Number(process.env.NEXTDEV_MAX_LOG_MB)
+  : 100) * 1024 * 1024;
+
+// ---------------------------------------------------------------------------
+// Paths + state
+// ---------------------------------------------------------------------------
+
+const STATE_ROOT = process.env.NEXTDEV_STATE_ROOT || path.join(
+  process.env.XDG_STATE_HOME
+    || (IS_WIN
+      ? (process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'))
+      : path.join(os.homedir(), '.local', 'state')),
+  'nextdev',
+);
+fs.mkdirSync(STATE_ROOT, { recursive: true });
+
+function die(msg, code = 1) {
+  process.stderr.write(`nextdev: ${msg}\n`);
+  process.exit(code);
+}
+function warn(msg) { process.stderr.write(`nextdev: ${msg}\n`); }
+
+function hashCwd(cwd) {
+  return crypto.createHash('sha1').update(cwd).digest('hex').slice(0, 12);
+}
+function instanceDir(cwd = process.cwd()) {
+  const abs = fs.realpathSync(cwd);
+  return path.join(STATE_ROOT, hashCwd(abs));
+}
+function readField(dir, name) {
+  try { return fs.readFileSync(path.join(dir, name), 'utf8').trim(); }
+  catch { return ''; }
+}
+function writeField(dir, name, value) {
+  fs.writeFileSync(path.join(dir, name), `${value}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// Process helpers
+// ---------------------------------------------------------------------------
+
+function pidAlive(pid) {
+  if (!pid || Number.isNaN(pid)) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e.code === 'EPERM'; }
+}
+
+function pidCmdline(pid) {
+  if (IS_WIN) {
+    const r = spawnSync('powershell', [
+      '-NoProfile', '-Command',
+      `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`,
+    ], { encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : '';
+  }
+  const r = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : '';
+}
+
+function looksLikeDev(pid) {
+  if (!pidAlive(pid)) return false;
+  const args = pidCmdline(pid);
+  // Best-effort: if we can't read cmdline (permissions, rare), trust the pid file.
+  if (!args) return true;
+  return /\b(node|next|npm|pnpm|yarn|bun)\b/i.test(args);
+}
+
+function childrenOf(pid) {
+  if (IS_WIN) {
+    const r = spawnSync('powershell', [
+      '-NoProfile', '-Command',
+      `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | Select-Object -ExpandProperty ProcessId`,
+    ], { encoding: 'utf8' });
+    if (r.status !== 0) return [];
+    return r.stdout.split(/\r?\n/).map(s => s.trim()).filter(s => /^\d+$/.test(s)).map(Number);
+  }
+  const r = spawnSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' });
+  if (r.status !== 0) return [];
+  return r.stdout.trim().split('\n')
+    .map(l => l.trim().split(/\s+/))
+    .filter(([, ppid]) => Number(ppid) === pid)
+    .map(([p]) => Number(p));
+}
+
+function killTree(pid, sig = 'SIGTERM') {
+  if (!pid) return;
+  for (const c of childrenOf(pid)) killTree(c, sig);
+  try { process.kill(pid, sig); } catch { /* already gone */ }
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function waitExit(pid, timeoutMs = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!pidAlive(pid)) return true;
+    await sleep(100);
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Port + package manager
+// ---------------------------------------------------------------------------
+
+function portInUse(port) {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', (e) => resolve(e.code === 'EADDRINUSE'));
+    s.once('listening', () => s.close(() => resolve(false)));
+    s.listen(Number(port), '127.0.0.1');
+  });
+}
+
+async function findFreePort(start = 3000) {
+  // Skip ports already claimed by other live nextdev instances to avoid races
+  const claimed = new Set();
+  try {
+    for (const name of fs.readdirSync(STATE_ROOT)) {
+      const d = path.join(STATE_ROOT, name);
+      const pid = Number(readField(d, 'pid'));
+      const port = Number(readField(d, 'port'));
+      if (pid && port && looksLikeDev(pid)) claimed.add(port);
+    }
+  } catch {}
+  for (let p = start; p < start + 200; p++) {
+    if (claimed.has(p)) continue;
+    if (!(await portInUse(p))) return p;
+  }
+  throw new Error(`no free port in ${start}-${start + 199}`);
+}
+
+function detectPM(cwd) {
+  if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (fs.existsSync(path.join(cwd, 'yarn.lock')))      return 'yarn';
+  if (fs.existsSync(path.join(cwd, 'bun.lockb')) ||
+      fs.existsSync(path.join(cwd, 'bun.lock')))        return 'bun';
+  if (fs.existsSync(path.join(cwd, 'package.json')))   return 'npm';
+  return null;
+}
+
+function pmDevCmd(pm) {
+  return ({
+    pnpm: ['pnpm', ['dev']],
+    yarn: ['yarn', ['dev']],
+    bun:  ['bun',  ['run', 'dev']],
+    npm:  ['npm',  ['run', 'dev']],
+  })[pm];
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+async function cmdStart(argv) {
+  let port, pm, customCmd;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if      (a === '--port') port = argv[++i];
+    else if (a === '--pm')   pm = argv[++i];
+    else if (a === '--cmd')  customCmd = argv[++i];
+    else if (a === '-h' || a === '--help') { printHelp(); process.exit(0); }
+    else die(`unknown flag: ${a}`);
+  }
+
+  const cwd = process.cwd();
+  if (!fs.existsSync(path.join(cwd, 'package.json'))) die(`no package.json in ${cwd}`);
+
+  const dir = instanceDir(cwd);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const existingPid = Number(readField(dir, 'pid'));
+  if (existingPid && looksLikeDev(existingPid)) {
+    console.log(`Already running: pid=${existingPid} port=${readField(dir, 'port')}`);
+    console.log(`Use 'nextdev restart' to replace it.`);
+    process.exit(1);
+  }
+  try { fs.unlinkSync(path.join(dir, 'pid')); } catch {}
+
+  let cmd, args, displayCmd;
+  if (customCmd) {
+    cmd = IS_WIN ? 'cmd.exe' : 'sh';
+    args = IS_WIN ? ['/d', '/s', '/c', customCmd] : ['-c', customCmd];
+    displayCmd = customCmd;
+  } else {
+    pm = pm || detectPM(cwd);
+    if (!pm) die('no package manager detected (need a lockfile or package.json)');
+    const got = pmDevCmd(pm);
+    if (!got) die(`unknown pm: ${pm}`);
+    [cmd, args] = got;
+    displayCmd = `${cmd} ${args.join(' ')}`;
+  }
+
+  if (!port) port = await findFreePort(3000);
+  else if (await portInUse(Number(port))) die(`port ${port} is already in use`);
+
+  writeField(dir, 'cwd', cwd);
+  writeField(dir, 'port', String(port));
+  writeField(dir, 'command', displayCmd);
+  writeField(dir, 'started_at', new Date().toISOString());
+
+  const logPath = path.join(dir, 'dev.log');
+  if (fs.existsSync(logPath)) fs.renameSync(logPath, path.join(dir, 'dev.log.prev'));
+  const logFd = fs.openSync(logPath, 'a');
+
+  const child = spawn(cmd, args, {
+    cwd,
+    env: { ...process.env, PORT: String(port) },
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+    shell: IS_WIN && !customCmd,  // pm binaries are .cmd on Windows
+    windowsHide: true,
+  });
+  child.unref();
+  fs.closeSync(logFd);
+  writeField(dir, 'pid', String(child.pid));
+
+  // Spawn log rotation watcher (detached, self-exits when dev server dies)
+  const watcher = spawn(process.execPath, [
+    __filename, '__watch-log',
+    logPath, String(MAX_LOG_BYTES), path.join(dir, 'pid'),
+  ], { detached: true, stdio: 'ignore' });
+  watcher.unref();
+
+  await sleep(200);
+  if (!pidAlive(child.pid)) {
+    warn(`process exited immediately — check ${logPath}`);
+    try {
+      const tail = fs.readFileSync(logPath, 'utf8').split('\n').slice(-20).join('\n');
+      process.stderr.write(tail + '\n');
+    } catch {}
+    process.exit(1);
+  }
+
+  console.log(`Started ${path.basename(cwd)} (nextdev)`);
+  console.log(`  pid:  ${child.pid}`);
+  console.log(`  port: ${port}`);
+  console.log(`  cmd:  ${displayCmd}`);
+  console.log(`  url:  http://localhost:${port}`);
+  console.log(`  logs: ${logPath}`);
+}
+
+async function cmdStop(argv) {
+  const force = argv.includes('--force');
+  const dir = instanceDir();
+  const pid = Number(readField(dir, 'pid'));
+  if (!pid) { console.log(`Not running from ${process.cwd()}`); return; }
+
+  if (!force && !looksLikeDev(pid)) {
+    warn(`pid ${pid} no longer looks like node/next; refusing to kill`);
+    warn(`use 'nextdev stop --force' to override, or 'nextdev clean' to drop the registration`);
+    process.exit(1);
+  }
+
+  console.log(`Stopping pid=${pid} (tree) ...`);
+  killTree(pid, 'SIGTERM');
+  if (!(await waitExit(pid, 10000))) {
+    warn('did not exit on TERM; sending KILL');
+    killTree(pid, 'SIGKILL');
+    if (!(await waitExit(pid, 5000))) warn(`pid ${pid} still alive`);
+  }
+  try { fs.unlinkSync(path.join(dir, 'pid')); } catch {}
+  console.log('Stopped.');
+}
+
+async function cmdRestart(argv) {
+  try { await cmdStop([]); } catch {}
+  await cmdStart(argv);
+}
+
+function cmdStatus() {
+  const dir = instanceDir();
+  if (!fs.existsSync(dir)) {
+    console.log(`No instance registered for ${process.cwd()}`);
+    return;
+  }
+  const pid = Number(readField(dir, 'pid'));
+  const state = pid && looksLikeDev(pid) ? 'running' : 'stopped';
+  let logSize = '—';
+  try {
+    const bytes = fs.statSync(path.join(dir, 'dev.log')).size;
+    logSize = bytes > 1e9 ? `${(bytes / 1e9).toFixed(1)}GB ⚠` :
+              bytes > 1e6 ? `${(bytes / 1e6).toFixed(1)}MB` :
+                            `${Math.round(bytes / 1e3)}KB`;
+  } catch {}
+  const rows = [
+    ['state',    state],
+    ['cwd',      readField(dir, 'cwd')],
+    ['pid',      pid || '—'],
+    ['port',     readField(dir, 'port') || '—'],
+    ['cmd',      readField(dir, 'command') || '—'],
+    ['started',  readField(dir, 'started_at') || '—'],
+    ['log size', logSize],
+    ['logs',     path.join(dir, 'dev.log')],
+  ];
+  for (const [k, v] of rows) console.log(`${(k + ':').padEnd(9)} ${v}`);
+}
+
+function cmdList() {
+  const pad = (s, n) => String(s).padEnd(n);
+  console.log(`${pad('STATE', 10)}  ${pad('PID', 6)}  ${pad('PORT', 6)}  CWD`);
+  let entries = [];
+  try { entries = fs.readdirSync(STATE_ROOT).sort(); } catch { return; }
+  for (const name of entries) {
+    const d = path.join(STATE_ROOT, name);
+    let stat; try { stat = fs.statSync(d); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    const pid = Number(readField(d, 'pid'));
+    const state = pid && looksLikeDev(pid) ? 'running' : 'stopped';
+    console.log(`${pad(state, 10)}  ${pad(pid || '-', 6)}  ${pad(readField(d, 'port') || '-', 6)}  ${readField(d, 'cwd') || '?'}`);
+  }
+}
+
+function cmdLogs(argv) {
+  let follow = false, n = 200;
+  for (let i = 0; i < argv.length; i++) {
+    if      (argv[i] === '-f') follow = true;
+    else if (argv[i] === '-n') n = Number(argv[++i]);
+    else die(`unknown flag: ${argv[i]}`);
+  }
+  const logPath = path.join(instanceDir(), 'dev.log');
+  if (!fs.existsSync(logPath)) die(`no logs at ${logPath}`);
+
+  const content = fs.readFileSync(logPath, 'utf8');
+  const lines = content.split('\n');
+  process.stdout.write(lines.slice(-n - 1).join('\n'));
+
+  if (follow) {
+    let size = fs.statSync(logPath).size;
+    fs.watchFile(logPath, { interval: 200 }, (curr) => {
+      if (curr.size > size) {
+        fs.createReadStream(logPath, { start: size, end: curr.size })
+          .pipe(process.stdout, { end: false });
+        size = curr.size;
+      } else if (curr.size < size) {
+        size = 0;  // rotated
+      }
+    });
+  }
+}
+
+function cmdClean() {
+  let removed = 0;
+  let entries = [];
+  try { entries = fs.readdirSync(STATE_ROOT); } catch {}
+  for (const name of entries) {
+    const d = path.join(STATE_ROOT, name);
+    let stat; try { stat = fs.statSync(d); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    const pid = Number(readField(d, 'pid'));
+    if (!pid || !looksLikeDev(pid)) {
+      fs.rmSync(d, { recursive: true, force: true });
+      removed++;
+    }
+  }
+  console.log(`Removed ${removed} stale registration(s).`);
+}
+
+function cmdDoctor() {
+  console.log(`nextdev ${VERSION}`);
+  console.log(`state root: ${STATE_ROOT}`);
+  console.log(`platform:   ${process.platform} (${process.arch})`);
+  console.log(`node:       ${process.version}`);
+  for (const tool of ['npm', 'pnpm', 'yarn', 'bun']) {
+    const r = spawnSync(tool, ['--version'], { encoding: 'utf8', shell: IS_WIN });
+    if (r.status === 0) console.log(`${(tool + ':').padEnd(11)} ${r.stdout.trim()}`);
+  }
+}
+
+// Internal: spawned as a detached child to rotate logs for a running instance.
+// argv: logPath maxBytes pidFile
+function cmdWatchLog(argv) {
+  const [logPath, maxBytesStr, pidFile] = argv;
+  const maxBytes = Number(maxBytesStr) || MAX_LOG_BYTES;
+  const KEEP_BYTES = 512 * 1024; // keep last 512 KB after rotation
+
+  function rotate() {
+    try {
+      const size = fs.statSync(logPath).size;
+      if (size <= maxBytes) return;
+      // Read tail, truncate, write header + tail.
+      // Child uses O_APPEND so its next write goes to new EOF — safe on Linux/macOS.
+      const fd = fs.openSync(logPath, 'r+');
+      const buf = Buffer.alloc(KEEP_BYTES);
+      const bytesRead = fs.readSync(fd, buf, 0, KEEP_BYTES, Math.max(0, size - KEEP_BYTES));
+      const header = Buffer.from(
+        `\n[nextdev: log rotated at ${new Date().toISOString()}, discarded ${Math.round(size / 1e6)}MB]\n`
+      );
+      fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, header, 0, header.length, 0);
+      fs.writeSync(fd, buf, 0, bytesRead, header.length);
+      fs.closeSync(fd);
+    } catch { /* log may not exist yet or already gone */ }
+  }
+
+  function checkAlive() {
+    try {
+      const pid = parseInt(fs.readFileSync(pidFile, 'utf8'));
+      if (isNaN(pid)) return process.exit(0);
+      process.kill(pid, 0); // throws ESRCH if dead
+    } catch { process.exit(0); }
+  }
+
+  setInterval(rotate, 30_000);    // check log size every 30s
+  setInterval(checkAlive, 60_000); // exit when dev server dies
+}
+
+function printHelp() {
+  const src = fs.readFileSync(__filename, 'utf8').split('\n');
+  const header = [];
+  for (const line of src) {
+    if (line.startsWith('#!')) continue;
+    if (!line.startsWith('//')) break;                     // top comment block only
+    header.push(line.replace(/^\/\/ ?/, ''));
+  }
+  process.stdout.write(header.join('\n').trimEnd() + '\n');
+}
+
+// ---------------------------------------------------------------------------
+// Entry
+// ---------------------------------------------------------------------------
+
+(async () => {
+  const [sub, ...rest] = process.argv.slice(2);
+  try {
+    switch (sub) {
+      case 'start':   await cmdStart(rest); break;
+      case 'stop':    await cmdStop(rest); break;
+      case 'restart': await cmdRestart(rest); break;
+      case 'status':  cmdStatus(); break;
+      case 'list':
+      case 'ls':      cmdList(); break;
+      case 'logs':    cmdLogs(rest); break;
+      case 'clean':        cmdClean(); break;
+      case 'doctor':       cmdDoctor(); break;
+      case '__watch-log':  cmdWatchLog(rest); break;
+      case '-v':
+      case '--version': console.log(`nextdev ${VERSION}`); break;
+      case undefined:
+      case '-h':
+      case '--help':  printHelp(); break;
+      default: die(`unknown command: ${sub} (try --help)`);
+    }
+  } catch (e) {
+    die(e && e.message ? e.message : String(e));
+  }
+})();

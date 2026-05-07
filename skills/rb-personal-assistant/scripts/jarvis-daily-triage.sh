@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Jarvis Daily Triage Script
+# This script runs headlessly to triage Gmail and updates Obsidian + macOS Notifications.
+
+# Path setup for cron
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Configuration
+GEMINI_BIN="/opt/homebrew/bin/gemini"
+OBSIDIAN_BIN="/opt/homebrew/bin/obsidian"
+LOG_FILE="\$HOME/.gemini/tmp/jarvis-triage.log"
+
+# 1. Run Gemini Triage
+echo "--- Starting Jarvis triage at \$(date) ---" >> "\$LOG_FILE"
+
+# Run gemini and capture output
+SUMMARY=\$($GEMINI_BIN --prompt "Triage my latest Gmail inbox. Summarize any urgent alerts or action items concisely. Archive routine newsletters, promotional items, and shipping notifications. Move condo notices to Home. Provide a clean, markdown summary." --approval-mode=yolo 2>&1)
+
+# Log the summary for debugging if needed
+echo "\$SUMMARY" >> "\$LOG_FILE"
+
+# 2. Process and Save to Obsidian
+# Format the summary: remove mechanical logs, keep the core report.
+# We expect the SUMMARY to contain the markdown report from Gemini.
+REPORT_FILE="Jarvis Summaries/Triage-\$(date +'%Y-%m-%d-%H-%M').md"
+
+# 3. Create individual file in Obsidian
+# Note: Obsidian must be open for the 'obsidian' command to work via the socket.
+# We separate the clean summary from the mechanical logs to put the summary at the top.
+CLEAN_SUMMARY=\$(echo "\$SUMMARY" | sed -n '/###/,\$p')
+MECHANICAL_LOGS=\$(echo "\$SUMMARY" | sed '/###/,\$d')
+
+\$OBSIDIAN_BIN create path="\$REPORT_FILE" content="# Triage Summary: \$(date +'%Y-%m-%d %H:%M')\n\n\$CLEAN_SUMMARY\n\n---\n## Process Details & Logs\n\n\$MECHANICAL_LOGS" overwrite silent
+
+# 4. Link in Daily Note
+DAILY_NOTE="Daily/\$(date +'%Y-%m-%d').md"
+\$OBSIDIAN_BIN append path="\$DAILY_NOTE" content="\n- [[\$REPORT_FILE|Jarvis Triage Summary \$(date +'%H:%M')]]" silent
+
+# 5. macOS Notification
+osascript -e "display notification \"Inbox triaged. Report saved to \$REPORT_FILE.\" with title \"Jarvis\" subtitle \"Daily Triage Complete\""
+
+echo "--- Triage complete at \$(date) ---" >> "\$LOG_FILE"

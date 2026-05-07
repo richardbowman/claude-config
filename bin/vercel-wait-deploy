@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# vercel-wait-deploy — wait for the Vercel deployment for a given commit SHA
+# to reach success or failure, using the GitHub Deployments API via `gh`.
+#
+# Usage: vercel-wait-deploy [--cwd <dir>] [--sha <commit-sha>] [--target <env>] [--timeout <seconds>]
+#
+# Options:
+#   --cwd <dir>       Project directory (default: $PWD, used to resolve git repo)
+#   --sha <sha>       Git commit SHA to wait for (default: HEAD of --cwd)
+#   --target <env>    Environment filter substring, case-insensitive (default: any)
+#   --timeout <secs>  Max seconds to wait (default: 600)
+#
+# Outputs the deployment URL on success; exits 1 on error or timeout.
+# Writes the URL to /tmp/vercel_prod_url.txt on success for subsequent steps.
+
+set -euo pipefail
+
+CWD="$PWD"
+SHA=""
+TIMEOUT=600
+TARGET=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cwd)      CWD="$2";     shift 2 ;;
+    --sha)      SHA="$2";     shift 2 ;;
+    --timeout)  TIMEOUT="$2"; shift 2 ;;
+    --target)   TARGET="$2";  shift 2 ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+if [[ -z "$SHA" ]]; then
+  # Fetch so origin/HEAD reflects squash merges and other remote-only commits
+  git -C "$CWD" fetch origin --quiet 2>/dev/null || true
+  SHA=$(git -C "$CWD" rev-parse origin/HEAD 2>/dev/null || git -C "$CWD" rev-parse HEAD)
+else
+  # Expand short SHAs to full 40-char; also validates the SHA exists locally
+  SHA=$(git -C "$CWD" rev-parse "$SHA" 2>/dev/null || echo "$SHA")
+fi
+
+# Derive GitHub repo (owner/repo) from the git remote of $CWD
+REPO=$(git -C "$CWD" remote get-url origin \
+  | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+if [[ -z "$REPO" ]]; then
+  echo "Error: could not determine GitHub repo from $CWD remote." >&2
+  exit 1
+fi
+
+DEADLINE=$(( $(date +%s) + TIMEOUT ))
+
+TARGET_LABEL="${TARGET:-any}"
+echo "Waiting for deployment of $SHA in $REPO (target: $TARGET_LABEL) ..."
+
+# Step 1: Wait for a GitHub deployment to appear for this SHA + environment
+DEPLOY_ID=""
+while true; do
+  if [[ -n "$TARGET" ]]; then
+    TARGET_LC=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')
+    JQ_FILTER="[.[] | select(.environment | ascii_downcase | contains(\"$TARGET_LC\"))] | .[0].id // empty"
+  else
+    JQ_FILTER=".[0].id // empty"
+  fi
+  DEPLOY_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
+    --jq "$JQ_FILTER" \
+    2>/dev/null || true)
+
+  if [[ -n "$DEPLOY_ID" ]]; then
+    echo "Found deployment: $DEPLOY_ID"
+    break
+  fi
+
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "Timeout: deployment for $SHA never appeared." >&2
+    exit 1
+  fi
+
+  echo "  deployment not yet registered, retrying in 10s..."
+  sleep 10
+done
+
+# Step 2: Poll deployment statuses until success/failure
+while true; do
+  READ=$(gh api "repos/$REPO/deployments/$DEPLOY_ID/statuses?per_page=1" \
+    --jq '.[0] | {state: .state, url: (.environment_url // .target_url // "")}' \
+    2>/dev/null || echo '{"state":"unknown","url":""}')
+
+  STATUS=$(echo "$READ" | jq -r '.state')
+  DEPLOY_URL=$(echo "$READ" | jq -r '.url')
+
+  echo "  status: $STATUS"
+
+  if [[ "$STATUS" == "success" ]]; then
+    # Prefer the stable branch alias over the per-deploy hash URL
+    ALIAS_URL=$(vercel inspect "$DEPLOY_URL" --cwd "$CWD" 2>&1 \
+      | grep -o 'https://[^ ]*\.vercel\.app' | grep -v "$DEPLOY_URL" | head -1 || true)
+    OUTPUT_URL="${ALIAS_URL:-$DEPLOY_URL}"
+    echo "Deployment ready: $OUTPUT_URL"
+    echo "$OUTPUT_URL" > /tmp/vercel_prod_url.txt
+    exit 0
+  fi
+
+  if [[ "$STATUS" == "failure" || "$STATUS" == "error" ]]; then
+    echo "Deployment failed with status: $STATUS" >&2
+    exit 1
+  fi
+
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "Timeout waiting for deployment to become ready (last status: $STATUS)." >&2
+    exit 1
+  fi
+
+  sleep 15
+done
