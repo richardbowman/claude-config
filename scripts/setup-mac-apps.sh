@@ -25,6 +25,7 @@
 #   - databricks                Databricks CLI (requires 3rd-party tap: databricks/tap)
 # Fonts:
 #   - font-source-code-pro      Adobe's Source Code Pro (programmer font)
+#   - font-jetbrains-mono       JetBrains Mono (default terminal font for cmux/ghostty)
 set -euo pipefail
 
 log() { printf '\n==> %s\n' "$*"; }
@@ -84,7 +85,7 @@ done
 
 # Fonts (casks in the main homebrew-cask repo since Homebrew 4.0 — no tap needed)
 log "Fonts"
-for f in font-source-code-pro; do
+for f in font-source-code-pro font-jetbrains-mono; do
   brew_cask "$f"
 done
 
