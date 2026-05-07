@@ -8,6 +8,7 @@ Personal Claude Code configuration synced across machines.
 - `plugins/known_marketplaces.json` — registered plugin marketplaces
 - `skills/` — hand-authored skills (see below)
 - `skills.txt` — third-party skills to install via `npx skills add`
+- `scripts/` — shared TypeScript utilities used by skills (run via `npx tsx`)
 - `rules/` — custom CLAUDE.md-style rules synced to `~/.claude/rules/` (e.g., context7.md)
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
 - `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
@@ -17,6 +18,8 @@ Personal Claude Code configuration synced across machines.
 
 | Skill | Purpose |
 |---|---|
+| `brain-dump` | Structured knowledge extraction interview — Claude asks focused questions, synthesizes what it learns, and saves a full transcript + structured notes to an Obsidian vault. |
+| `brainstorm` | Active ideation partner — Claude leads with angles, fills knowledge gaps, challenges assumptions, and produces a structured Obsidian ideation doc with transcript. |
 | `nextjs-local-dev` | Run/monitor Next.js dev servers via the `nextdev` CLI. Per-worktree isolation, safe stop/restart, env-var recipes for worktrees. |
 | `podman-postgres` | Local Postgres via Podman — cross-platform, named volumes, backup/restore, upgrades. |
 | `vercel-tools` | Vercel CLI recipes — migration status/apply, deployment monitoring, historical logs. |
