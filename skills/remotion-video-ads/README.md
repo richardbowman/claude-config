@@ -1,4 +1,4 @@
-# Remotion Video Ads — Golden Wealth
+# Remotion Video Ads
 
 This skill covers end-to-end production of social media video ads using Remotion, OpenAI TTS, and Whisper for audio-visual sync. Reference the existing ads as canonical examples before building new ones.
 
@@ -33,8 +33,8 @@ Keep it tight. These are the word counts that worked:
 | 9:16 Instagram/Reels | 27s | ~55 words |
 | 16:9 YouTube pre-roll | 30s | ~62 words |
 
-**9:16 script (the one that worked — "responsible parent" campaign):**
-> "If something happened to you tomorrow, could your family find everything? Golden Wealth gets you organized. Link your accounts, your bank, your 401k, net worth in real time. Upload your will, your deeds, your policies — encrypted and findable. Set who sees what. Spouse sees everything. Attorney sees legal. Accountant sees finances. You've done the hard part. Now finish the plan."
+**9:16 script (example — "responsible parent" campaign):**
+> "If something happened to you tomorrow, could your family find everything? [YourBrand] gets you organized. Link your accounts, your bank, your 401k, net worth in real time. Upload your will, your deeds, your policies — encrypted and findable. Set who sees what. Spouse sees everything. Attorney sees legal. Accountant sees finances. You've done the hard part. Now finish the plan."
 
 The opening hook ("If something happened to you tomorrow…") is the most important line. It has to create immediate emotional resonance for the responsible parent persona.
 
@@ -84,7 +84,7 @@ Map each spoken phrase to the scene it belongs in. Use the **end frame of the la
 **Example output for 9x16:**
 ```
 "If something happened to you tomorrow..." → 0f–122f    → Scene1
-"Golden Wealth gets you organized."        → 122f–182f  → Scene2
+"[YourBrand] gets you organized."          → 122f–182f  → Scene2
 "Link your accounts..."                    → 182f–307f  → Scene3 / Accounts
 "Upload your will..."                      → 307f–442f  → Scene3 / Documents
 "Set who sees what..."                     → 442f–624f  → Scene3 / Access
@@ -162,17 +162,17 @@ background: `${W_GREEN}20`       // ← valid hex-alpha
 
 For oklch colors, convert using Node.js `culori` or just pick the nearest hex manually. The background gradient in Scene1/Scene2 can use oklch directly in a `background` string (not appended), but any pattern like `${color}XX` must use hex.
 
-**Established hex tokens for the Golden Wealth brand in ads:**
+**Example brand hex tokens (define your own palette):**
 ```ts
-const W_NAVY   = '#0f172a'
-const W_GREEN  = '#22c55e'
-const W_BLUE   = '#3b82f6'
-const W_AMBER  = '#f59e0b'
-const W_ROSE   = '#f43f5e'
-const W_BORDER = '#1e293b'
-const W_TEXT   = '#f1f5f9'
-const W_MUTED  = '#94a3b8'
-const W_BG     = '#0f172a'
+const BRAND_NAVY   = '#0f172a'
+const BRAND_GREEN  = '#22c55e'
+const BRAND_BLUE   = '#3b82f6'
+const BRAND_AMBER  = '#f59e0b'
+const BRAND_ROSE   = '#f43f5e'
+const BRAND_BORDER = '#1e293b'
+const BRAND_TEXT   = '#f1f5f9'
+const BRAND_MUTED  = '#94a3b8'
+const BRAND_BG     = '#0f172a'
 ```
 
 ---
@@ -184,7 +184,7 @@ const W_BG     = '#0f172a'
 - **Scene1 (hook):** Full-screen dark bg, large serif headline, floating account/document cards in background
 - **Scene2 (transition):** Checklist with checkmark animation, brief pause
 - **Scene3 (features):** `FeatureScene9x16` — eyebrow label + bold headline at top, compact widget card below. Three sub-scenes via nested `<Sequence>`. No browser chrome, no sidebar — just the content rows in a white rounded card.
-- **MidCTABadge:** Persistent pill at bottom (`from={182}`) showing "Start for free → live-golden.com"
+- **MidCTABadge:** Persistent pill at bottom (`from={182}`) showing "Start for free → your-app.com"
 - **EndCard:** Typewriter URL animation + pulsing CTA button
 
 Widget components (`AccountsWidget`, `DocsWidget`, `AccessWidget`) show 3-4 animated rows of real-looking app data. Rows animate in with `spring()` staggered by index.
