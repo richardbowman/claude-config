@@ -81,8 +81,8 @@ if (fs.existsSync(binSrc)) {
 }
 
 // Skills live in a separate repo: richardbowman/claude-skills
-const SKILLS_REPO_URL = 'https://github.com/richardbowman/claude-skills.git';
-const SKILLS_REPO_DIR = path.join(HOME, 'claude-skills');
+const SKILLS_REPO_URL = 'https://github.com/richardbowman/agent-skills.git';
+const SKILLS_REPO_DIR = path.join(HOME, 'agent-skills');
 
 console.log('==> claude-skills');
 if (fs.existsSync(path.join(SKILLS_REPO_DIR, '.git'))) {

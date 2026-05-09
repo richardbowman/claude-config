@@ -2,7 +2,7 @@
 
 Personal Claude Code machine setup — settings, dotfiles, shell config, and CLIs synced across machines.
 
-Skills live in a separate repo: **[claude-skills](https://github.com/richardbowman/claude-skills)**. Bootstrap pulls it in automatically.
+Skills live in a separate repo: **[agent-skills](https://github.com/richardbowman/agent-skills)**. Bootstrap pulls it in automatically.
 
 ## What's in here
 
@@ -13,11 +13,11 @@ Skills live in a separate repo: **[claude-skills](https://github.com/richardbowm
 - `rules/` — custom CLAUDE.md-style rules synced to `~/.claude/rules/` (e.g., context7.md)
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
 - `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
-- `bootstrap.js` — does the real work: symlinks settings/plugins/rules/bin into `~/.claude/`, clones + bootstraps `claude-skills`, installs third-party skills
+- `bootstrap.js` — does the real work: symlinks settings/plugins/rules/bin into `~/.claude/`, clones + bootstraps `agent-skills`, installs third-party skills
 
 ## Skills
 
-Hand-authored skills live in **[richardbowman/claude-skills](https://github.com/richardbowman/claude-skills)** — cloned to `~/claude-skills/` and symlinked into `~/.claude/skills/` by bootstrap.
+Hand-authored skills live in **[richardbowman/agent-skills](https://github.com/richardbowman/agent-skills)** — cloned to `~/agent-skills/` and symlinked into `~/.claude/skills/` by bootstrap.
 
 **Third-party skills** (installed via `npx skills add`, listed in `skills.txt`):
 
@@ -138,7 +138,7 @@ Typical contents on a fresh machine — adjust paths for macOS (`/Users/<you>`) 
 
 ## Adding a skill
 
-**Hand-authored skill:** add it to [claude-skills](https://github.com/richardbowman/claude-skills) — create `<name>/SKILL.md`, run `node ~/claude-skills/bootstrap.js`, add the trigger to `~/.claude/CLAUDE.md`.
+**Hand-authored skill:** add it to [agent-skills](https://github.com/richardbowman/agent-skills) — create `<name>/SKILL.md`, run `node ~/agent-skills/bootstrap.js`, add the trigger to `~/.claude/CLAUDE.md`.
 
 **Third-party skill:** install locally (`npx skills add <name>`), add its name to `skills.txt`, commit and push — other machines pick it up on next bootstrap run.
 
