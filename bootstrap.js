@@ -80,29 +80,25 @@ if (fs.existsSync(binSrc)) {
   }
 }
 
-const skillsSrc = path.join(REPO, 'skills');
-if (fs.existsSync(skillsSrc)) {
-  console.log('==> Linking skills');
-  for (const name of fs.readdirSync(skillsSrc)) {
-    const src = path.join(skillsSrc, name);
-    if (!fs.statSync(src).isDirectory()) continue;
-    link(src, path.join(CLAUDE, 'skills', name));
-  }
+// Skills live in a separate repo: richardbowman/claude-skills
+const SKILLS_REPO_URL = 'https://github.com/richardbowman/claude-skills.git';
+const SKILLS_REPO_DIR = path.join(HOME, 'claude-skills');
 
-  // Prune stale skill symlinks that pointed into this repo but were renamed/deleted.
-  const claudeSkillsDir = path.join(CLAUDE, 'skills');
-  for (const name of fs.readdirSync(claudeSkillsDir)) {
-    const dst = path.join(claudeSkillsDir, name);
-    let st;
-    try { st = fs.lstatSync(dst); } catch { continue; }
-    if (!st.isSymbolicLink()) continue;
-    const target = fs.readlinkSync(dst);
-    if (!target.startsWith(skillsSrc + path.sep)) continue;  // not ours
-    if (!fs.existsSync(target)) {
-      console.log(`    prune  ${dst} (dangling -> ${target})`);
-      fs.unlinkSync(dst);
-    }
-  }
+console.log('==> claude-skills');
+if (fs.existsSync(path.join(SKILLS_REPO_DIR, '.git'))) {
+  console.log(`    pulling ${SKILLS_REPO_DIR}`);
+  const r = spawnSync('git', ['-C', SKILLS_REPO_DIR, 'pull', '--ff-only'], { stdio: 'inherit' });
+  if (r.status !== 0) console.log('    warning: git pull failed — using existing copy');
+} else {
+  console.log(`    cloning into ${SKILLS_REPO_DIR}`);
+  const r = spawnSync('git', ['clone', SKILLS_REPO_URL, SKILLS_REPO_DIR], { stdio: 'inherit' });
+  if (r.status !== 0) throw new Error('Failed to clone claude-skills');
+}
+const skillsBootstrap = path.join(SKILLS_REPO_DIR, 'bootstrap.js');
+if (fs.existsSync(skillsBootstrap)) {
+  console.log('    running claude-skills/bootstrap.js');
+  const r = spawnSync(process.execPath, [skillsBootstrap], { stdio: 'inherit' });
+  if (r.status !== 0) console.log('    warning: claude-skills bootstrap reported errors');
 }
 
 const rulesSrc = path.join(REPO, 'rules');

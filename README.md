@@ -1,30 +1,23 @@
 # claude-config
 
-Personal Claude Code configuration synced across machines.
+Personal Claude Code machine setup — settings, dotfiles, shell config, and CLIs synced across machines.
+
+Skills live in a separate repo: **[claude-skills](https://github.com/richardbowman/claude-skills)**. Bootstrap pulls it in automatically.
 
 ## What's in here
 
 - `settings.json` — permissions allow-list, enabled plugins, model preference
 - `plugins/known_marketplaces.json` — registered plugin marketplaces
-- `skills/` — hand-authored skills (see below)
 - `skills.txt` — third-party skills to install via `npx skills add`
-- `scripts/` — shared TypeScript utilities used by skills (run via `npx tsx`)
+- `scripts/` — shared TypeScript utilities (run via `npx tsx`)
 - `rules/` — custom CLAUDE.md-style rules synced to `~/.claude/rules/` (e.g., context7.md)
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
 - `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
-- `bootstrap.js` — does the real work: symlinks this repo into `~/.claude/` and `~/.local/bin/`, installs missing third-party skills
+- `bootstrap.js` — does the real work: symlinks settings/plugins/rules/bin into `~/.claude/`, clones + bootstraps `claude-skills`, installs third-party skills
 
-## Included skills
+## Skills
 
-| Skill | Purpose |
-|---|---|
-| `brain-dump` | Structured knowledge extraction interview — Claude asks focused questions, synthesizes what it learns, and saves a full transcript + structured notes to an Obsidian vault. |
-| `brainstorm` | Active ideation partner — Claude leads with angles, fills knowledge gaps, challenges assumptions, and produces a structured Obsidian ideation doc with transcript. |
-| `nextjs-local-dev` | Run/monitor Next.js dev servers via the `nextdev` CLI. Per-worktree isolation, safe stop/restart, env-var recipes for worktrees. |
-| `podman-postgres` | Local Postgres via Podman — cross-platform, named volumes, backup/restore, upgrades. |
-| `vercel-tools` | Vercel CLI recipes — migration status/apply, deployment monitoring, historical logs. |
-| `verify-before-coding` | Forces Claude to verify APIs/flags before writing code in fast-moving ecosystems (Vercel, Next.js, AI SDK, Node tooling). |
-| `worktree-bootstrap` | Prep a git worktree for local Next.js dev when the project uses Vercel/DSQL — installs deps, copies .env.local, starts Podman Postgres, injects DATABASE_URL, launches nextdev. |
+Hand-authored skills live in **[richardbowman/claude-skills](https://github.com/richardbowman/claude-skills)** — cloned to `~/claude-skills/` and symlinked into `~/.claude/skills/` by bootstrap.
 
 **Third-party skills** (installed via `npx skills add`, listed in `skills.txt`):
 
@@ -145,11 +138,9 @@ Typical contents on a fresh machine — adjust paths for macOS (`/Users/<you>`) 
 
 ## Adding a skill
 
-1. Install it locally (`npx skills add <name>`)
-2. Add its name to `skills.txt`
-3. Commit and push — other machines pick it up on next bootstrap run
+**Hand-authored skill:** add it to [claude-skills](https://github.com/richardbowman/claude-skills) — create `<name>/SKILL.md`, run `node ~/claude-skills/bootstrap.js`, add the trigger to `~/.claude/CLAUDE.md`.
 
-Repo-local skills (hand-authored) live under `skills/<name>/SKILL.md`. `bootstrap.sh` symlinks every `skills/*/` directory into `~/.claude/skills/`.
+**Third-party skill:** install locally (`npx skills add <name>`), add its name to `skills.txt`, commit and push — other machines pick it up on next bootstrap run.
 
 ## Adding a plugin
 
