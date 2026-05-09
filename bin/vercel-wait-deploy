@@ -15,6 +15,19 @@
 
 set -euo pipefail
 
+# Ensure common tool install locations are on PATH so gh/vercel are always found
+# regardless of how the script is invoked (hooks, subshells, restricted envs).
+for _dir in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin"; do
+  [[ ":$PATH:" != *":$_dir:"* ]] && export PATH="$_dir:$PATH"
+done
+
+# Fail fast with a clear error if gh isn't available — don't silently loop
+if ! command -v gh &>/dev/null; then
+  echo "Error: 'gh' (GitHub CLI) not found on PATH." >&2
+  echo "Install with: brew install gh" >&2
+  exit 1
+fi
+
 CWD="$PWD"
 SHA=""
 TIMEOUT=600
@@ -63,7 +76,7 @@ while true; do
   fi
   DEPLOY_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
     --jq "$JQ_FILTER" \
-    2>/dev/null || true)
+    2>&1) || { echo "  gh api error (will retry): $DEPLOY_ID"; DEPLOY_ID=""; }
 
   if [[ -n "$DEPLOY_ID" ]]; then
     echo "Found deployment: $DEPLOY_ID"
