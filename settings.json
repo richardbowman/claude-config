@@ -10,6 +10,7 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "model": "us.anthropic.claude-sonnet-4-6",
   "hooks": {
     "SessionStart": [
       {
@@ -41,6 +42,5 @@
       },
       "autoUpdate": true
     }
-  },
-  "model": "sonnet"
+  }
 }

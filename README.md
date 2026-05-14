@@ -17,7 +17,7 @@ Skills live in a separate repo: **[agent-skills](https://github.com/richardbowma
 
 ## Skills
 
-Hand-authored skills live in **[richardbowman/agent-skills](https://github.com/richardbowman/agent-skills)** — cloned to `~/agent-skills/` and symlinked into `~/.claude/skills/` by bootstrap.
+Hand-authored skills live in **[richardbowman/agent-skills](https://github.com/richardbowman/agent-skills)** — cloned as a sibling of this repo (e.g. `~/GitHub/agent-skills/`) and symlinked into `~/.claude/skills/` by bootstrap.
 
 **Third-party skills** (installed via `npx skills add`, listed in `skills.txt`):
 
@@ -46,9 +46,9 @@ Hand-authored skills live in **[richardbowman/agent-skills](https://github.com/r
 
 ```sh
 xcode-select --install   # if not already installed
-git clone https://github.com/richardbowman/claude-config.git ~/claude-config
-~/claude-config/scripts/setup-mac.sh
-~/claude-config/scripts/setup-mac-apps.sh   # optional: personal apps
+git clone https://github.com/richardbowman/claude-config.git ~/Projects/claude-config   # or ~/GitHub, ~/code, etc.
+~/Projects/claude-config/scripts/setup-mac.sh
+~/Projects/claude-config/scripts/setup-mac-apps.sh   # optional: personal apps
 ```
 
 One-liner (the script now detects piped-stdin and reattaches to `/dev/tty` when possible):
@@ -73,7 +73,7 @@ podman machine start
 **Verify everything wired up:**
 
 ```sh
-ls -la ~/.claude/settings.json            # should be a symlink -> ~/claude-config/settings.json
+ls -la ~/.claude/settings.json            # should be a symlink -> <projects-dir>/claude-config/settings.json
 ls ~/.claude/skills/                      # should list all synced skills
 nextdev doctor                            # should report node + brew-installed tools
 ```
@@ -81,8 +81,8 @@ nextdev doctor                            # should report node + brew-installed 
 ### Linux / manual
 
 ```sh
-git clone git@github.com:<user>/claude-config.git ~/claude-config
-~/claude-config/bootstrap.sh
+git clone git@github.com:<user>/claude-config.git ~/Projects/claude-config   # any directory works
+~/Projects/claude-config/bootstrap.sh
 ```
 
 **Prereq: Node 18+.** If `node` isn't on PATH, `bootstrap.sh` prints install instructions and exits. Recommended:
@@ -138,7 +138,7 @@ Typical contents on a fresh machine — adjust paths for macOS (`/Users/<you>`) 
 
 ## Adding a skill
 
-**Hand-authored skill:** add it to [agent-skills](https://github.com/richardbowman/agent-skills) — create `<name>/SKILL.md`, run `node ~/agent-skills/bootstrap.js`, add the trigger to `~/.claude/CLAUDE.md`.
+**Hand-authored skill:** add it to [agent-skills](https://github.com/richardbowman/agent-skills) — create `<name>/SKILL.md`, run `node <projects-dir>/agent-skills/bootstrap.js`, add the trigger to `~/.claude/CLAUDE.md`.
 
 **Third-party skill:** install locally (`npx skills add <name>`), add its name to `skills.txt`, commit and push — other machines pick it up on next bootstrap run.
 

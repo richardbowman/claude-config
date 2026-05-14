@@ -80,9 +80,10 @@ if (fs.existsSync(binSrc)) {
   }
 }
 
-// Skills live in a separate repo: richardbowman/claude-skills
+// Skills live in a separate repo: richardbowman/agent-skills
+// Cloned as a sibling of this repo so it works regardless of projects folder name.
 const SKILLS_REPO_URL = 'https://github.com/richardbowman/agent-skills.git';
-const SKILLS_REPO_DIR = path.join(HOME, 'agent-skills');
+const SKILLS_REPO_DIR = path.join(path.dirname(REPO), 'agent-skills');
 
 console.log('==> claude-skills');
 if (fs.existsSync(path.join(SKILLS_REPO_DIR, '.git'))) {
