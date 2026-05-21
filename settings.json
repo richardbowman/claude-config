@@ -1,4 +1,7 @@
 {
+  "env": {
+    "PATH": "/Users/rbowman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  },
   "permissions": {
     "allow": [
       "Read",
@@ -6,12 +9,25 @@
       "Grep",
       "Bash",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "Write(/Users/rbowman/GitHub/bankrate-skills-e2e/*)"
     ],
     "defaultMode": "acceptEdits"
   },
   "model": "us.anthropic.claude-sonnet-4-6",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); file=$(echo \"$input\" | jq -r '.tool_input.file_path // .tool_input.filePath // empty'); if [ -z \"$file\" ]; then exit 0; fi; dir=$(dirname \"$file\"); git_root=$(git -C \"$dir\" rev-parse --show-toplevel 2>/dev/null); if [ -z \"$git_root\" ]; then exit 0; fi; branch=$(git -C \"$git_root\" symbolic-ref --short HEAD 2>/dev/null); if [ \"$branch\" = \"main\" ] || [ \"$branch\" = \"master\" ]; then echo \"{\\\"decision\\\":\\\"block\\\",\\\"reason\\\":\\\"On protected branch '$branch'. Create a feature branch first: git checkout -b feat/your-feature-name\\\"}\"; exit 2; fi; exit 0",
+            "statusMessage": "Checking branch..."
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
@@ -30,7 +46,6 @@
   },
   "enabledPlugins": {
     "obsidian@obsidian-skills": true,
-    "vercel-plugin@vercel": true,
     "slack@claude-plugins-official": true,
     "figma@claude-plugins-official": true
   },
