@@ -5,3 +5,5 @@ plugins/installed_plugins.json
 .claude/
 dist/
 .gemini/
+.exclude
+skills/
