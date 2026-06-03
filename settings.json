@@ -26,6 +26,16 @@
             "statusMessage": "Checking branch..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/GitHub/claude-config/bin/check-secret-staging.ts",
+            "statusMessage": "Checking for secret staging..."
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -47,7 +57,8 @@
   "enabledPlugins": {
     "obsidian@obsidian-skills": true,
     "slack@claude-plugins-official": true,
-    "figma@claude-plugins-official": true
+    "figma@claude-plugins-official": true,
+    "bankrate-platform@agent-plugins-for-bankrate": true
   },
   "extraKnownMarketplaces": {
     "obsidian-skills": {
@@ -56,6 +67,12 @@
         "repo": "kepano/obsidian-skills"
       },
       "autoUpdate": true
+    },
+    "agent-plugins-for-bankrate": {
+      "source": {
+        "source": "git",
+        "url": "git@github-bankrate:bankrate/bankrate-agent-skills.git"
+      }
     }
   }
 }

@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/Users/rbowman/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-05-13T16:41:46.559Z"
+    "lastUpdated": "2026-06-03T16:41:50.424Z"
   },
   "vercel": {
     "source": {
@@ -13,7 +13,7 @@
       "repo": "vercel/vercel-plugin"
     },
     "installLocation": "/Users/rbowman/.claude/plugins/marketplaces/vercel",
-    "lastUpdated": "2026-05-14T16:33:32.902Z",
+    "lastUpdated": "2026-06-03T20:11:11.418Z",
     "autoUpdate": true
   },
   "obsidian-skills": {
@@ -22,7 +22,15 @@
       "repo": "kepano/obsidian-skills"
     },
     "installLocation": "/Users/rbowman/.claude/plugins/marketplaces/obsidian-skills",
-    "lastUpdated": "2026-05-14T16:33:34.552Z",
+    "lastUpdated": "2026-06-03T20:11:12.593Z",
     "autoUpdate": true
+  },
+  "agent-plugins-for-bankrate": {
+    "source": {
+      "source": "git",
+      "url": "git@github-bankrate:bankrate/bankrate-agent-skills.git"
+    },
+    "installLocation": "/Users/rbowman/.claude/plugins/marketplaces/agent-plugins-for-bankrate",
+    "lastUpdated": "2026-05-21T13:42:00.636Z"
   }
 }
