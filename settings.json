@@ -1,64 +1,24 @@
 {
-  "env": {
-    "PATH": "/Users/rbowman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-  },
   "permissions": {
     "allow": [
-      "Read",
-      "Glob",
-      "Grep",
-      "Bash",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(jq *)",
+      "Bash(ls *)",
+      "Bash(mkdir -p *)",
+      "Bash(cp *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(grep *)",
+      "Bash(kill *)",
+      "Bash(openssl *)",
       "WebFetch",
-      "WebSearch",
-      "Write(/Users/rbowman/GitHub/bankrate-skills-e2e/*)"
+      "WebSearch"
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "us.anthropic.claude-sonnet-4-6",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); file=$(echo \"$input\" | jq -r '.tool_input.file_path // .tool_input.filePath // empty'); if [ -z \"$file\" ]; then exit 0; fi; dir=$(dirname \"$file\"); git_root=$(git -C \"$dir\" rev-parse --show-toplevel 2>/dev/null); if [ -z \"$git_root\" ]; then exit 0; fi; branch=$(git -C \"$git_root\" symbolic-ref --short HEAD 2>/dev/null); if [ \"$branch\" = \"main\" ] || [ \"$branch\" = \"master\" ]; then echo \"{\\\"decision\\\":\\\"block\\\",\\\"reason\\\":\\\"On protected branch '$branch'. Create a feature branch first: git checkout -b feat/your-feature-name\\\"}\"; exit 2; fi; exit 0",
-            "statusMessage": "Checking branch..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/GitHub/claude-config/bin/check-secret-staging.ts",
-            "statusMessage": "Checking for secret staging..."
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/GitHub/claude-config/bin/check-aws-auth",
-            "statusMessage": "Checking AWS authentication..."
-          }
-        ]
-      }
-    ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bash $HOME/GitHub/claude-config/bin/statusline-command.sh"
-  },
   "enabledPlugins": {
-    "obsidian@obsidian-skills": true,
-    "slack@claude-plugins-official": true,
-    "figma@claude-plugins-official": true,
-    "bankrate-platform@agent-plugins-for-bankrate": true
+    "obsidian@obsidian-skills": true
   },
   "extraKnownMarketplaces": {
     "obsidian-skills": {
@@ -67,12 +27,6 @@
         "repo": "kepano/obsidian-skills"
       },
       "autoUpdate": true
-    },
-    "agent-plugins-for-bankrate": {
-      "source": {
-        "source": "git",
-        "url": "git@github-bankrate:bankrate/bankrate-agent-skills.git"
-      }
     }
   }
 }
