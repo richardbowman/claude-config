@@ -72,6 +72,19 @@ Authenticated account: `rbcodelabs@gmail.com`
 
 Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v25 runs TypeScript natively (no `tsx`, `ts-node`, or compilation step needed) — use a `#!/usr/bin/env node` shebang and write `.ts` files directly.
 
+## Settings Files (shared vs. local)
+
+There are two Claude settings files on this machine. They merge at runtime; `settings.local.json` overrides/extends `settings.json`.
+
+| File | What goes here | In git? |
+|---|---|---|
+| `~/claude-config/settings.json` (symlinked from `~/.claude/settings.json`) | **Shared config only.** Machine-agnostic permissions (e.g. `Bash(git *)`, `Bash(gh *)`), the `obsidian-skills` marketplace + plugin, `defaultMode`. | Yes, committed to the `claude-config` repo on GitHub. Used by both personal and work machines. |
+| `~/.claude/settings.local.json` | **Machine-specific config.** `env.PATH`, `model`, `mcpServers`, `enabledPlugins` that are personal/work-only, `permissions.additionalDirectories`, `permissions.allow` patterns referencing local paths or services, machine-specific `hooks` and `statusLine`. | No, gitignored. Different on each machine. |
+
+**Rule for future edits:** when adding to settings, default to `settings.local.json`. Only put a setting in the shared `settings.json` if it's universally portable across machines. Anything with a username (`rickbowman`, `rbowman`), `localhost`, machine-specific paths, or a different model per machine belongs in `settings.local.json`.
+
+A reference copy of the work-machine `settings.local.json` is preserved at `~/Documents/Personal/Claude/work-machine-settings-reference-2026-06-08.md`. When you return to the work machine, paste that into its `~/.claude/settings.local.json`.
+
 ## API Debugging Strategy
 
 When a feature requires calling an external API and the correct request shape or behavior is unclear (underdocumented, multiple plausible approaches, or prior attempts failed silently), **write a throwaway Node.js probe script first before touching the plugin or app code.** The script should:
