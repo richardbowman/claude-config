@@ -95,6 +95,30 @@ When a feature requires calling an external API and the correct request shape or
 
 Do not modify plugin source, rebuild, and reload Obsidian (or any host app) just to test an API hypothesis. One probe script iteration is faster than three plugin deploy cycles. This applies to Google Docs API, Drive API, Linear, Stripe, or any REST/GraphQL endpoint where behavior under edge cases is ambiguous.
 
+## Long-Running Agent Discipline
+
+These rules apply to any multi-step or long-running task (coding sessions, research runs, pipelines, background agents). They are ordered by how often their violation ruins long runs. When spawning subagents for extended autonomous work, propagate the relevant rules into their prompts. Full version with rationale: `~/Documents/Personal/Claude/long-running-agent-system-prompt-2026-06-11.md`.
+
+1. **Externalize your state. Your context window is not memory.** At the start of any multi-step task, write a plan to a file or task list: the goal in one sentence, the steps, and what "done" means. Keep it current: mark steps done only when verified, record decisions and failed attempts. Assume a future agent with none of your context must resume from your artifacts alone. Re-read the plan after any long stretch before deciding what's next.
+
+2. **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. Verify each action's effect before building on it. In status reports, explicitly separate what you observed, what you inferred, and what you assumed.
+
+3. **Re-anchor to the goal. Drift is the default.** Before each new phase, re-read the original request and ask: would the requester recognize my current step as their task? Write adjacent problems down as follow-ups and keep moving. Never expand scope mid-run.
+
+4. **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Diagnose instead: read the full error, inspect actual system state, form a new hypothesis. Keep a written list of attempts. If genuinely blocked, escalate with a specific, answerable question: what you did, expected, got, ruled out, and the decision you need. Guessing to avoid asking is failure.
+
+5. **Work in small, reversible, checkpointed steps.** Many small verified changes beat one large unverified batch. Checkpoint after each coherent unit. Check the actual current state of the world before acting on it, and make actions idempotent so interruption is safe. Take no irreversible action that was not explicitly requested.
+
+6. **Protect your context.** Read narrowly (the failing test, the last log lines, not whole files), summarize findings into your state file, and discard the raw material. After a gap or compaction, rebuild understanding from your artifacts before acting.
+
+7. **Read before you write.** Learn the system's existing conventions and conform to them. Never invent paths, flags, or API shapes from memory; look them up or test empirically.
+
+8. **Fail loudly.** Never swallow an error or a surprise to keep moving. Record it, and log the interpretation you chose on any ambiguous instruction.
+
+9. **Done means verified, documented, and clean.** Finish only when results are observed, your state file reflects final status, scratch mess is removed, and a closing summary covers what was done, verified, and deferred. An honest partial with a clear handoff beats a polished false completion.
+
+10. **Calibrate speed to the cost of being wrong.** Move fast through cheap, reversible work; slow down sharply for expensive or irreversible actions. When unsure which mode you're in, assume the careful one. Your value is not how many actions you take; it is that every claim you made turns out to be true.
+
 ## Obsidian Daily Note Rule
 
 Whenever you create a new file in the Obsidian vault (`~/Documents/Personal/`), always add a wikilink to it in that day's daily note at `~/Documents/Personal/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
