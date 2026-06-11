@@ -95,29 +95,25 @@ When a feature requires calling an external API and the correct request shape or
 
 Do not modify plugin source, rebuild, and reload Obsidian (or any host app) just to test an API hypothesis. One probe script iteration is faster than three plugin deploy cycles. This applies to Google Docs API, Drive API, Linear, Stripe, or any REST/GraphQL endpoint where behavior under edge cases is ambiguous.
 
-## Long-Running Agent Discipline
+## Working Discipline (multi-step tasks)
 
-These rules apply to any multi-step or long-running task (coding sessions, research runs, pipelines, background agents). They are ordered by how often their violation ruins long runs. When spawning subagents for extended autonomous work, propagate the relevant rules into their prompts. Full version with rationale: `~/Documents/Personal/Claude/long-running-agent-system-prompt-2026-06-11.md`.
+Follow this procedure for any multi-step task: a feature, a bug with an unknown cause, a refactor, a pipeline, a background run. Skip the ceremony for trivial single-step edits, but the two principles at the bottom always apply. When spawning subagents for extended autonomous work, propagate this section into their prompts.
 
-1. **Externalize your state. Your context window is not memory.** At the start of any multi-step task, write a plan to a file or task list: the goal in one sentence, the steps, and what "done" means. Keep it current: mark steps done only when verified, record decisions and failed attempts. Assume a future agent with none of your context must resume from your artifacts alone. Re-read the plan after any long stretch before deciding what's next.
+1. **Before writing any code**, create a checklist with one unchecked item per requirement, plus a final item: "End-to-end verification of every requirement against the running system." Use the built-in task-list tool when available; otherwise write `TODO.md` in the working directory. `TODO.md` is scratch: never commit it unless asked to.
 
-2. **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. Verify each action's effect before building on it. In status reports, explicitly separate what you observed, what you inferred, and what you assumed.
+2. **Work one item at a time.** After implementing each item: (a) write an automated test for it, (b) run the tests and watch them pass, (c) only then check the item off.
 
-3. **Re-anchor to the goal. Drift is the default.** Before each new phase, re-read the original request and ask: would the requester recognize my current step as their task? Write adjacent problems down as follow-ups and keep moving. Never expand scope mid-run.
+3. **Before reporting done:** run the system for real and verify every requirement end-to-end (curl, fetch, a browser tool if available, or equivalent), exactly as a user would hit it. Then re-read the original request line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then check the final item.
 
-4. **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Diagnose instead: read the full error, inspect actual system state, form a new hypothesis. Keep a written list of attempts. If genuinely blocked, escalate with a specific, answerable question: what you did, expected, got, ruled out, and the decision you need. Guessing to avoid asking is failure.
+4. **The final report lists each requirement** with how it was verified (test name or command, plus the observed result). Anything not verified is listed as NOT VERIFIED. Never summarize verification you did not perform.
 
-5. **Work in small, reversible, checkpointed steps.** Many small verified changes beat one large unverified batch. Checkpoint after each coherent unit. Check the actual current state of the world before acting on it, and make actions idempotent so interruption is safe. Take no irreversible action that was not explicitly requested.
+5. **Clean up:** kill processes you started, remove scratch files that are not deliverables, and leave the work tree in the state you would want to inherit.
 
-6. **Protect your context.** Read narrowly (the failing test, the last log lines, not whole files), summarize findings into your state file, and discard the raw material. After a gap or compaction, rebuild understanding from your artifacts before acting.
+Two principles govern everything above:
 
-7. **Read before you write.** Learn the system's existing conventions and conform to them. Never invent paths, flags, or API shapes from memory; look them up or test empirically.
+- **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. An item may only be checked off, and a claim only made, on observed evidence.
 
-8. **Fail loudly.** Never swallow an error or a surprise to keep moving. Record it, and log the interpretation you chose on any ambiguous instruction.
-
-9. **Done means verified, documented, and clean.** Finish only when results are observed, your state file reflects final status, scratch mess is removed, and a closing summary covers what was done, verified, and deferred. An honest partial with a clear handoff beats a polished false completion.
-
-10. **Calibrate speed to the cost of being wrong.** Move fast through cheap, reversible work; slow down sharply for expensive or irreversible actions. When unsure which mode you're in, assume the careful one. Your value is not how many actions you take; it is that every claim you made turns out to be true.
+- **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Read the full error, inspect actual system state, form a new hypothesis. If genuinely blocked, stop and escalate precisely: what you did, expected, got, and ruled out. Guessing to avoid asking is failure.
 
 ## Obsidian Daily Note Rule
 
