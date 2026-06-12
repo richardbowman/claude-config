@@ -1,0 +1,80 @@
+{
+  "env": {
+    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/rickbowman/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(jq *)",
+      "Bash(ls *)",
+      "Bash(mkdir -p *)",
+      "Bash(cp *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(grep *)",
+      "Bash(kill *)",
+      "Bash(openssl *)",
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(tsx *)",
+      "Bash(worktree-bootstrap*)",
+      "Bash(curl https://www.yourhiptrip.com/*)",
+      "Bash(curl http://localhost:3000/*)",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": ["/Users/rickbowman"]
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "model": "sonnet",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/require-worktree.sh",
+            "statusMessage": "Checking worktree..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/claude-config/bin/check-aws-auth",
+            "statusMessage": "Checking AWS authentication..."
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/claude-config/bin/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "obsidian@obsidian-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "obsidian-skills": {
+      "source": {
+        "source": "github",
+        "repo": "kepano/obsidian-skills"
+      },
+      "autoUpdate": true
+    }
+  },
+  "mcpServers": {
+    "helio": {
+      "type": "http",
+      "url": "http://localhost:3008/api/mcp"
+    }
+  }
+}

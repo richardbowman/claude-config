@@ -60,8 +60,31 @@ console.log('==> Claude Code config bootstrap');
 console.log(`    repo:   ${REPO}`);
 console.log(`    target: ${CLAUDE}`);
 
-console.log('==> Linking settings');
-link(path.join(REPO, 'settings.json'),                        path.join(CLAUDE, 'settings.json'));
+// Pick which machine's settings.json to link.
+// Each machine has a complete settings file under settings/<name>.json.
+// Per Claude Code docs, ~/.claude/settings.json is the ONLY user-level
+// settings file — there is no user-level settings.local.json, so we
+// keep one full file per machine instead of trying to merge layers.
+const machineIdx = process.argv.indexOf('--machine');
+const machine    = machineIdx !== -1 ? process.argv[machineIdx + 1] : null;
+const settingsDir = path.join(REPO, 'settings');
+if (!machine) {
+  console.error('!! --machine <name> is required');
+  if (fs.existsSync(settingsDir)) {
+    console.error('   available:');
+    for (const name of fs.readdirSync(settingsDir)) {
+      if (name.endsWith('.json')) console.error(`     - ${name.replace(/\.json$/, '')}`);
+    }
+  }
+  process.exit(1);
+}
+const settingsSrc = path.join(settingsDir, `${machine}.json`);
+if (!fs.existsSync(settingsSrc)) {
+  console.error(`!! settings file not found: ${settingsSrc}`);
+  process.exit(1);
+}
+console.log(`==> Linking settings (machine: ${machine})`);
+link(settingsSrc, path.join(CLAUDE, 'settings.json'));
 
 const marketplacesJson = path.join(REPO, 'plugins', 'known_marketplaces.json');
 if (fs.existsSync(marketplacesJson)) {
@@ -210,4 +233,4 @@ if (fs.existsSync(shellSrc)) {
 }
 
 console.log('==> Done');
-console.log(`    Review machine-specific overrides in: ${path.join(CLAUDE, 'settings.local.json')}`);
+console.log(`    Active settings file: ${path.join(CLAUDE, 'settings.json')} -> ${settingsSrc}`);

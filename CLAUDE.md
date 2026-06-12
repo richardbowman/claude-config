@@ -72,18 +72,24 @@ Authenticated account: `rbcodelabs@gmail.com`
 
 Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v25 runs TypeScript natively (no `tsx`, `ts-node`, or compilation step needed) — use a `#!/usr/bin/env node` shebang and write `.ts` files directly.
 
-## Settings Files (shared vs. local)
+## Settings Files (per-machine, fully committed)
 
-There are two Claude settings files on this machine. They merge at runtime; `settings.local.json` overrides/extends `settings.json`.
+Claude Code only supports **one** user-level settings file: `~/.claude/settings.json`. There is no user-level `settings.local.json` (only project-level). To support multiple machines without conflicts, this repo keeps a **complete settings file per machine** under `settings/`, and `bootstrap.js --machine <name>` symlinks the right one into `~/.claude/settings.json`.
 
-| File | What goes here | In git? |
-|---|---|---|
-| `~/claude-config/settings.json` (symlinked from `~/.claude/settings.json`) | **Shared config only.** Machine-agnostic permissions (e.g. `Bash(git *)`, `Bash(gh *)`), the `obsidian-skills` marketplace + plugin, `defaultMode`. | Yes, committed to the `claude-config` repo on GitHub. Used by both personal and work machines. |
-| `~/.claude/settings.local.json` | **Machine-specific config.** `env.PATH`, `model`, `mcpServers`, `enabledPlugins` that are personal/work-only, `permissions.additionalDirectories`, `permissions.allow` patterns referencing local paths or services, machine-specific `hooks` and `statusLine`. | No, gitignored. Different on each machine. |
+| File | Purpose |
+|---|---|
+| `~/claude-config/settings/personal.json` | Full settings for the personal machine (`rickbowman`). Has helio MCP, `model: sonnet`, `bypassPermissions`, the `require-worktree.sh` hook, personal Bash patterns. |
+| `~/claude-config/settings/work.json` | Full settings for the work machine (`rbowman`). Has Bedrock model ID, branch-protect + secret-staging hooks, bankrate plugins. |
+| `~/.claude/settings.json` | Symlink to whichever per-machine file `bootstrap.js --machine <name>` was last run with. |
 
-**Rule for future edits:** when adding to settings, default to `settings.local.json`. Only put a setting in the shared `settings.json` if it's universally portable across machines. Anything with a username (`rickbowman`, `rbowman`), `localhost`, machine-specific paths, or a different model per machine belongs in `settings.local.json`.
+**Rule for future edits:** edit `settings/<machine>.json` for the machine you're on (use `realpath ~/.claude/settings.json` to confirm which one). If a setting should apply to **both** machines, edit both files. Some duplication of common permissions across the two files is the explicit tradeoff for not relying on undocumented merge behavior.
 
-A reference copy of the work-machine `settings.local.json` is preserved at `~/Documents/Personal/Claude/work-machine-settings-reference-2026-06-08.md`. When you return to the work machine, paste that into its `~/.claude/settings.local.json`.
+**Bootstrapping a new machine:** clone the repo to `~/claude-config`, then run `./bootstrap.sh --machine personal` (or `work`). Add a new machine by writing a new `settings/<name>.json` and running bootstrap with that name.
+
+**Work machine note:** the work machine has the repo at `~/GitHub/claude-config`, not `~/claude-config`. Create a symlink there so `$HOME/claude-config/bin/...` paths resolve:
+```bash
+ln -s ~/GitHub/claude-config ~/claude-config
+```
 
 ## API Debugging Strategy
 
