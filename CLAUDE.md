@@ -2,38 +2,7 @@
 
 ## Skills
 
-I have a skills library at `~/.claude/skills/`. **Before writing shell commands or code for any of the triggers below, invoke the matching skill first using the Skill tool.** Skills contain the correct recipes, gotchas, and flag syntax — do not improvise.
-
-| Trigger | Skill |
-|---|---|
-| User reports a bug, broken feature, or unexpected behavior in production | `debug` |
-| Apply or check migrations on preview or production | `dsql-migrate` + `vercel-tools` |
-| Start, stop, restart, or check the dev server | `nextjs-local-dev` |
-| Enter a fresh git worktree, bootstrap local dev | `worktree-bootstrap` |
-| Run E2E / Playwright tests locally | `e2e-local` |
-| Check Vercel deploy status, logs, wait for deploy | `vercel-tools` |
-| Write code using Vercel CLI, Next.js App Router, Vercel AI SDK, Turbopack | `verify-before-coding` |
-| New project needs Aurora DSQL + Prisma setup | `dsql-setup` |
-| Validate Prisma schema for DSQL compatibility | `dsql-schema` |
-| Execute DSQL queries or manage schemas directly | `dsql` |
-| Run local Postgres via Podman | `podman-postgres` |
-| Backup Vercel env vars to 1Password | `backup-vercel-secrets` |
-| Rick asks about email, newsletters, travel planning | `rb-personal-assistant` |
-| Mark roadmap items as shipped after merging a feature | `roadmap-ship` |
-| Plan a NEW Remotion video — script, storyboard, scene breakdown before any code | `video-storyboard` |
-| Build or update a Remotion video ad (TTS, Whisper sync, landing page embed) | `remotion-video-ads` |
-| Acting as a HipTrip editor — generating trips, curating hip places, publishing | `hiptrip-editor` |
-| Capture knowledge, brain dump, extract a workflow, strategy, or mental model into Obsidian | `brain-dump` |
-| Brainstorm, ideate, explore a concept, get outside-the-box ideas with rigor | `brainstorm` |
-| Consolidate memory, mine conversation logs for friction/feedback, run /dream | `dream` |
-| PM coaching, product discovery, thinking through outcomes vs output | `pm-coach` |
-| Build, review, or health-check an Opportunity Solution Tree (OST) | `ost-workflow` |
-| Synthesize user research, interviews, support tickets into OST-ready opportunities | `pm-signal-synthesis` |
-| Feature is done, about to open a PR, or marking a Linear issue In Review | `pr-checklist` |
-| Triage, merge, and ship open PRs on a repo (web app or plugin/distributable) | `release-manager` |
-| Automating a website, filling a form, or fetching live data from a JS-heavy or bot-protected site | `agent-browser` |
-
-Skills are invoked with the `Skill` tool, e.g. `skill: "vercel-tools"`. Read the output and follow its recipes exactly — don't substitute your own approach.
+Before writing shell commands or code, check the injected skills list and invoke the matching skill first using the `Skill` tool. Skills contain the correct recipes, gotchas, and exact flag syntax — do not improvise. Read the output and follow its recipes exactly.
 
 ## Web Browsing Escalation
 
@@ -103,23 +72,26 @@ Do not modify plugin source, rebuild, and reload Obsidian (or any host app) just
 
 ## Working Discipline (multi-step tasks)
 
-Follow this procedure for any multi-step task: a feature, a bug with an unknown cause, a refactor, a pipeline, a background run. Skip the ceremony for trivial single-step edits, but the two principles at the bottom always apply. When spawning subagents for extended autonomous work, propagate this section into their prompts.
+Follow this procedure exactly for every multi-step task. It is not optional. When spawning subagents for extended autonomous work, propagate this section into their prompts.
 
-1. **Before writing any code**, create a checklist with one unchecked item per requirement, plus a final item: "End-to-end verification of every requirement against the running system." Use the built-in task-list tool when available; otherwise write `TODO.md` in the working directory. `TODO.md` is scratch: never commit it unless asked to.
+1. **Before writing any code**, create `TODO.md` in the repository root with one unchecked checkbox (`- [ ]`) per requirement in the brief, plus a final item: `- [ ] End-to-end verification of every requirement against the running system`.
 
-2. **Work one item at a time.** After implementing each item: (a) write an automated test for it, (b) run the tests and watch them pass, (c) only then check the item off.
+2. **Work one item at a time.** After implementing each item:
+   a. Write an automated test for it.
+   b. Run the tests and watch them pass.
+   c. Only then check the box (`- [x]`) in `TODO.md`.
 
-3. **Before reporting done:** run the system for real and verify every requirement end-to-end (curl, fetch, a browser tool if available, or equivalent), exactly as a user would hit it. Then re-read the original request line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then check the final item.
+3. **After all items are checked except the last:** start the system for real and verify every requirement end-to-end with real requests (curl, fetch, a browser tool if one is available, or equivalent), exactly as a user would hit it. Then re-read the original brief line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then check the final box.
 
-4. **The final report lists each requirement** with how it was verified (test name or command, plus the observed result). Anything not verified is listed as NOT VERIFIED. Never summarize verification you did not perform.
-
-5. **Clean up:** kill processes you started, remove scratch files that are not deliverables, and leave the work tree in the state you would want to inherit.
+4. **Your final report must list each requirement** with how it was verified (test name or command, plus the observed result). Any requirement you did not verify must be listed as NOT VERIFIED. Do not summarize verification you did not perform.
 
 Two principles govern everything above:
 
-- **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. An item may only be checked off, and a claim only made, on observed evidence.
+- **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. A box may only be checked, and a claim only made, on observed evidence.
 
-- **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Read the full error, inspect actual system state, form a new hypothesis. If genuinely blocked, stop and escalate precisely: what you did, expected, got, and ruled out. Guessing to avoid asking is failure.
+- **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Read the full error, inspect actual system state, form a new hypothesis. If genuinely blocked, stop and report precisely: what you did, expected, got, and ruled out. Guessing to avoid reporting is failure.
+
+When you finish: clean up after yourself (kill processes you started, remove scratch files that are not deliverables) and leave the work tree in the state you would want to inherit.
 
 ## Obsidian Daily Note Rule
 
