@@ -1,6 +1,6 @@
 {
   "env": {
-    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/rickbowman/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/rickbowman/.local/bin:/Users/rickbowman/.local/share/fnm/aliases/default/bin:/Users/rickbowman/claude-config/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
   },
   "permissions": {
     "allow": [
@@ -26,7 +26,9 @@
       "WebSearch"
     ],
     "defaultMode": "bypassPermissions",
-    "additionalDirectories": ["/Users/rickbowman"]
+    "additionalDirectories": [
+      "/Users/rickbowman"
+    ]
   },
   "skipDangerousModePermissionPrompt": true,
   "model": "sonnet",
@@ -50,6 +52,17 @@
             "type": "command",
             "command": "$HOME/claude-config/bin/check-aws-auth",
             "statusMessage": "Checking AWS authentication..."
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/claude-config/bin/log-instructions-loaded",
+            "statusMessage": "Logging loaded instructions..."
           }
         ]
       }

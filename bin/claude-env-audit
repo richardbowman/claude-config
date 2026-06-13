@@ -1,0 +1,204 @@
+#!/usr/bin/env node
+/**
+ * claude-env-audit — snapshot every editable injection layer for the current
+ * Claude Code + Obsidian Claude Threads session on this machine.
+ *
+ * Usage:
+ *   ~/claude-config/bin/claude-env-audit             # print to stdout
+ *   ~/claude-config/bin/claude-env-audit > snap.txt  # save snapshot
+ *   diff snap-old.txt <(~/claude-config/bin/claude-env-audit)  # compare
+ */
+
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+const HOME = os.homedir();
+
+function header(label) {
+  const bar = '='.repeat(72);
+  return `\n${bar}\n## ${label}\n${bar}\n`;
+}
+
+function readFile(filePath) {
+  const abs = filePath.replace(/^~/, HOME);
+  try {
+    return fs.readFileSync(abs, 'utf8');
+  } catch {
+    return `[NOT FOUND: ${abs}]`;
+  }
+}
+
+function listDir(dirPath) {
+  const abs = dirPath.replace(/^~/, HOME);
+  try {
+    return fs.readdirSync(abs).map(f => path.join(abs, f));
+  } catch {
+    return [];
+  }
+}
+
+function resolveSymlink(filePath) {
+  const abs = filePath.replace(/^~/, HOME);
+  try {
+    const real = fs.realpathSync(abs);
+    return real !== abs ? `${filePath} -> ${real}` : filePath;
+  } catch {
+    return filePath;
+  }
+}
+
+const out = [];
+
+out.push(`# Claude Code Environment Audit`);
+out.push(`# Generated: ${new Date().toISOString()}`);
+out.push(`# Machine: ${os.hostname()}`);
+
+// --- Layer 2: Global CLAUDE.md ---
+out.push(header('Layer 2: Global CLAUDE.md'));
+out.push(`# Source: ${resolveSymlink('~/.claude/CLAUDE.md')}`);
+out.push('');
+out.push(readFile('~/.claude/CLAUDE.md'));
+
+// --- Layer 3: Rules directory ---
+out.push(header('Layer 3: Global rules (~/.claude/rules/)'));
+const rulesFiles = listDir('~/.claude/rules');
+if (rulesFiles.length === 0) {
+  out.push('[directory empty or missing]');
+} else {
+  for (const f of rulesFiles.filter(f => f.endsWith('.md'))) {
+    const real = (() => { try { return fs.realpathSync(f); } catch { return f; } })();
+    out.push(`\n--- ${f}${real !== f ? ` -> ${real}` : ''} ---\n`);
+    out.push(fs.readFileSync(f, 'utf8'));
+  }
+}
+
+// --- Layer 4: Project CLAUDE.md ---
+out.push(header('Layer 4: Project CLAUDE.md (vault)'));
+out.push(`# Source: ~/Documents/Personal/CLAUDE.md`);
+out.push('');
+out.push(readFile('~/Documents/Personal/CLAUDE.md'));
+
+// --- Layer 5: Auto-memory ---
+out.push(header('Layer 5: Auto-memory'));
+const projectsDir = path.join(HOME, '.claude', 'projects');
+const memFiles = [];
+try {
+  for (const entry of fs.readdirSync(projectsDir)) {
+    const memPath = path.join(projectsDir, entry, 'memory', 'MEMORY.md');
+    if (fs.existsSync(memPath)) memFiles.push(memPath);
+  }
+} catch { /* ignore */ }
+
+if (memFiles.length === 0) {
+  out.push('[no memory files found]');
+} else {
+  for (const f of memFiles) {
+    const projectKey = path.basename(path.dirname(path.dirname(f)));
+    out.push(`\n--- ${projectKey}/memory/MEMORY.md ---\n`);
+    out.push(fs.readFileSync(f, 'utf8'));
+  }
+}
+
+// --- Layer 6: Plugin system prompt ---
+out.push(header('Layer 6: Plugin --append-system-prompt (static template)'));
+out.push(`# Source: ~/projects/obsidian-claude-threads/src/ThreadManager.ts`);
+out.push(`# buildEnvironmentSystemPrompt() always injects:`);
+out.push(`
+  "You are running inside the Obsidian Claude Threads plugin."
+  "Vault root (filesystem path): <vaultRoot>"
+  "Working directory: <thread.cwd>"
+  "Path semantics: obsidian_* use vault-relative, filesystem tools use absolute paths"
+  "Conversation history: completed threads saved to <vaultFolder>/YYYY-MM-DD-<slug>.md"
+  "Tool notes: set_working_directory, enter/exit_worktree, ScheduleWakeup, obsidian_*"
+
+Conditional additions:
+  - project.description  (if thread has a project with a description)
+  - thread.goal          (if /goal <text> was set)
+
+To inspect the live assembled version for a specific thread, read the raw session log:
+  ~/.claude/projects/<hash>/<session>/  (session_start events contain the full prompt)
+  Or use: obsidian_get_thread_log with type: "session_start"
+`);
+
+// --- Layer 7: Skills ---
+out.push(header('Layer 7: Skills (~/.claude/skills/)'));
+const skillsDir = path.join(HOME, '.claude', 'skills');
+try {
+  const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+  const skills = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillMd = path.join(skillsDir, entry.name, 'SKILL.md');
+    if (!fs.existsSync(skillMd)) continue;
+    const content = fs.readFileSync(skillMd, 'utf8');
+    const descMatch = content.match(/^description:\s*(.+)$/m);
+    const nameMatch = content.match(/^name:\s*(.+)$/m);
+    const realPath = (() => { try { return fs.realpathSync(skillMd); } catch { return skillMd; } })();
+    skills.push({
+      name: (nameMatch?.[1] ?? entry.name).trim(),
+      description: (descMatch?.[1] ?? '(no description)').trim(),
+      source: realPath !== skillMd ? realPath : skillMd,
+    });
+  }
+  skills.sort((a, b) => a.name.localeCompare(b.name));
+  out.push(`${skills.length} skills registered:\n`);
+  for (const s of skills) {
+    out.push(`  ${s.name.padEnd(32)} ${s.description}`);
+  }
+  out.push(`\nAll skills directory: ${skillsDir}`);
+} catch {
+  out.push(`[skills directory not found: ${skillsDir}]`);
+}
+
+// --- Layer 8: Deferred tools ---
+out.push(header('Layer 8: Deferred tools (dynamic — read from session system-reminder)'));
+out.push(`Deferred tools are emitted by the Claude Code CLI at session start.`);
+out.push(`To see the live list, read the <system-reminder> at the top of any active session.`);
+out.push(`Typical deferred tools: EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree,`);
+out.push(`  WebFetch, WebSearch, Monitor, TaskCreate/Get/List/Output/Stop/Update,`);
+out.push(`  NotebookEdit, RemoteTrigger, DesignSync, mcp__exa__web_search_exa, mcp__exa__web_fetch_exa`);
+
+// --- Layer 9: MCP servers ---
+out.push(header('Layer 9: MCP servers (settings.json)'));
+const settingsPath = path.join(HOME, '.claude', 'settings.json');
+try {
+  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  const mcpServers = settings.mcpServers ?? {};
+  const keys = Object.keys(mcpServers);
+  if (keys.length === 0) {
+    out.push('No MCP servers in settings.json.');
+    out.push('(Plugin in-process MCP server is always registered at runtime as the "obsidian" namespace)');
+  } else {
+    out.push(`${keys.length} MCP server(s) in settings.json:`);
+    for (const [k, v] of Object.entries(mcpServers)) {
+      out.push(`  ${k}: type=${v.type ?? '?'}`);
+    }
+  }
+  out.push(`\nPlugin in-process MCP: always registered as "mcp__obsidian__*" namespace`);
+} catch {
+  out.push(`[could not read settings.json at ${settingsPath}]`);
+}
+
+// --- Layer 10: Hooks ---
+out.push(header('Layer 10: Hooks (settings.json)'));
+try {
+  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  out.push(JSON.stringify(settings.hooks ?? {}, null, 2));
+} catch {
+  out.push('[could not read settings.json]');
+}
+
+const hookScripts = [
+  '~/.claude/hooks/require-worktree.sh',
+  '~/claude-config/bin/check-aws-auth',
+];
+for (const script of hookScripts) {
+  const abs = script.replace(/^~/, HOME);
+  if (fs.existsSync(abs)) {
+    out.push(`\n--- ${script} ---`);
+    out.push(fs.readFileSync(abs, 'utf8'));
+  }
+}
+
+console.log(out.join('\n'));
