@@ -74,14 +74,14 @@ Do not modify plugin source, rebuild, and reload Obsidian (or any host app) just
 
 Follow this procedure exactly for every multi-step task. It is not optional. When spawning subagents for extended autonomous work, propagate this section into their prompts.
 
-1. **Before writing any code**, create `TODO.md` in the repository root with one unchecked checkbox (`- [ ]`) per requirement in the brief, plus a final item: `- [ ] End-to-end verification of every requirement against the running system`.
+1. **Before writing any code**, use `TodoWrite` to create a task list with one item per requirement in the brief, plus a final item: "End-to-end verification of every requirement against the running system". All items start `pending`.
 
-2. **Work one item at a time.** After implementing each item:
+2. **Work one item at a time.** Mark the current item `in_progress` before starting it. After implementing each item:
    a. Write an automated test for it.
    b. Run the tests and watch them pass.
-   c. Only then check the box (`- [x]`) in `TODO.md`.
+   c. Only then mark it `completed` via `TodoWrite`.
 
-3. **After all items are checked except the last:** start the system for real and verify every requirement end-to-end with real requests (curl, fetch, a browser tool if one is available, or equivalent), exactly as a user would hit it. Then re-read the original brief line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then check the final box.
+3. **After all items are completed except the last:** start the system for real and verify every requirement end-to-end with real requests (curl, fetch, a browser tool if one is available, or equivalent), exactly as a user would hit it. Then re-read the original brief line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then mark the final item completed.
 
 4. **Your final report must list each requirement** with how it was verified (test name or command, plus the observed result). Any requirement you did not verify must be listed as NOT VERIFIED. Do not summarize verification you did not perform.
 
