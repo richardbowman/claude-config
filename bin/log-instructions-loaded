@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# InstructionsLoaded hook — appends the raw payload to a log file so we can
+# inspect what data Claude Code sends and decide whether to surface it in the plugin.
+#
+# Log location: ~/.claude/logs/instructions-loaded.jsonl
+# Each line is the raw JSON stdin from the hook, plus a timestamp we add.
+
+LOG="$HOME/.claude/logs/instructions-loaded.jsonl"
+PAYLOAD=$(cat)
+
+# Add a wall-clock timestamp alongside the hook payload
+printf '%s\n' "$(printf '%s' "$PAYLOAD" | python3 -c "
+import json, sys, datetime
+d = json.load(sys.stdin)
+d['_logged_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+print(json.dumps(d))
+" 2>/dev/null || echo "$PAYLOAD")" >> "$LOG"
+
+exit 0
