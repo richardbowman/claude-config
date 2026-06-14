@@ -92,20 +92,47 @@ if [ -n "$branch" ] && [ -n "$cwd" ]; then
         [ "$age" -lt 300 ] && preview_url=$(cat "$cache_file")
       fi
 
-      if [ -z "$preview_url" ] && [ ! -f "$cache_file" -o "$age" -ge 300 ] 2>/dev/null || [ ! -f "$cache_file" ]; then
+      if [ -z "$preview_url" ]; then
         enc_branch=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$branch" 2>/dev/null || printf '%s' "$branch")
         team_param=""
         case "$v_org_id" in team_*) team_param="&teamId=$v_org_id" ;; esac
+
+        # Step 1: find the deployment UID for this branch
         api_resp=$(curl -sf --max-time 4 \
           -H "Authorization: Bearer $vercel_token" \
           "https://api.vercel.com/v6/deployments?projectId=${v_project_id}&meta.githubCommitRef=${enc_branch}&limit=1&state=READY&target=preview${team_param}" \
           2>/dev/null)
-        raw_url=$(printf '%s' "$api_resp" | jq -r '.deployments[0].url // empty' 2>/dev/null)
-        if [ -n "$raw_url" ]; then
-          preview_url="https://$raw_url"
+        dep_uid=$(printf '%s' "$api_resp" | jq -r '.deployments[0].uid // empty' 2>/dev/null)
+        fallback_url=$(printf '%s' "$api_resp" | jq -r '.deployments[0].url // empty' 2>/dev/null)
+
+        if [ -n "$dep_uid" ]; then
+          # Step 2: fetch full deployment via v13 to get the alias array —
+          # same approach as vercel-wait-deploy.ts: pick shortest alias,
+          # which is the stable branch alias (not the per-commit hash URL).
+          team_q=""
+          case "$v_org_id" in team_*) team_q="?teamId=$v_org_id" ;; esac
+          dep_resp=$(curl -sf --max-time 4 \
+            -H "Authorization: Bearer $vercel_token" \
+            "https://api.vercel.com/v13/deployments/${dep_uid}${team_q}" \
+            2>/dev/null)
+          alias_url=$(printf '%s' "$dep_resp" | jq -r '
+            if (.alias | length) > 0
+            then (.alias | sort_by(length) | .[0])
+            else ""
+            end' 2>/dev/null)
+          if [ -n "$alias_url" ]; then
+            preview_url="https://$alias_url"
+          elif [ -n "$fallback_url" ]; then
+            preview_url="https://$fallback_url"
+          fi
+        elif [ -n "$fallback_url" ]; then
+          preview_url="https://$fallback_url"
+        fi
+
+        if [ -n "$preview_url" ]; then
           printf '%s' "$preview_url" > "$cache_file"
         else
-          # Cache empty so we don't hammer the API for branches with no deploy
+          # Cache empty result so we don't hammer the API for branches with no deploy
           printf '' > "$cache_file"
         fi
       fi
