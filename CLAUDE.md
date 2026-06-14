@@ -6,69 +6,23 @@ Before writing shell commands or code, check the injected skills list and invoke
 
 ## Web Browsing Escalation
 
-When fetching live web content, follow this hierarchy in order:
-
-1. **WebSearch** — for broad queries where you need a list of URLs to evaluate
-2. **WebFetch** — for simple, static pages (docs, blogs, plain HTML)
-3. **agent-browser** — use immediately, without trying WebFetch first, for:
-   - Any major e-commerce or retail site (Amazon, Walmart, Target, Home Depot, etc.)
-   - Any page that returns a 403, CAPTCHA, timeout, or a JS shell with no real content via WebFetch
-   - Live stock levels, prices, or account data rendered client-side by JavaScript
-   - Any SPA where the content you need isn't in the initial HTML response
-
-Never retry WebFetch after a clear bot-block or empty JS shell. Go straight to `agent-browser`. The `web-search` skill workflow step "use WebFetch on the most relevant URLs" means WebFetch for static pages only — use agent-browser for anything on a retail or heavily JS-rendered site.
+Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
 
 ## Google Workspace CLI (`gws`)
 
-Use the `gws` CLI for **all** Google Workspace operations — Drive, Gmail, Calendar, Sheets, etc. Never improvise with raw `curl` against Google APIs or attempt to configure `rclone`, `gdrive`, or ADC for Workspace tasks. `gws` is already authenticated and handles token refresh automatically.
-
-```bash
-# Pattern: gws <service> <resource> <method> [flags]
-gws drive files list --params '{"pageSize": 10}'
-gws drive files create --json '{"name": "My Folder", "mimeType": "application/vnd.google-apps.folder"}'
-gws drive files create --json '{"name": "file.mp4", "parents": ["<folderId>"]}' --upload path/to/file.mp4
-gws gmail users messages list --params '{"userId": "me", "maxResults": 10}'
-gws calendar events list --params '{"calendarId": "primary"}'
-gws sheets spreadsheets get --params '{"spreadsheetId": "<id>"}'
-
-# Discover a method's schema before using it:
-gws schema drive.files.create
-```
-
-Authenticated account: `richard.bowman@gmail.com`
+Use the `gws` CLI for **all** Google Workspace operations. Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it. Authenticated account: `richard.bowman@gmail.com`
 
 ## Scripting Language
 
 Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v22.6+ runs TypeScript natively (no `tsx`, `ts-node`, or compilation step needed) — use a `#!/usr/bin/env node` shebang and write `.ts` files directly.
 
-## Settings Files (per-machine, fully committed)
+## Settings Files
 
-Claude Code only supports **one** user-level settings file: `~/.claude/settings.json`. To support multiple machines without conflicts, this repo keeps a **complete settings file per machine** under `settings/`, and `bootstrap.js --machine <name>` symlinks the right one into `~/.claude/settings.json`.
-
-| File | Purpose |
-|---|---|
-| `~/claude-config/settings/personal.json` | Full settings for the personal machine (`rickbowman`). Has helio MCP, `model: sonnet`, `bypassPermissions`, the `require-worktree.sh` hook, personal Bash patterns. |
-| `~/claude-config/settings/work.json` | Full settings for the work machine (`rbowman`). Has Bedrock model ID, branch-protect + secret-staging hooks, bankrate plugins. |
-| `~/.claude/settings.json` | Symlink to whichever per-machine file `bootstrap.js --machine <name>` was last run with. |
-
-**Rule for future edits:** edit `settings/<machine>.json` for the machine you're on (use `realpath ~/.claude/settings.json` to confirm which one). If a setting should apply to **both** machines, edit both files. Some duplication of common permissions across the two files is the explicit tradeoff for not relying on undocumented merge behavior.
-
-**Bootstrapping a new machine:** clone the repo to `~/claude-config`, then run `./bootstrap.sh --machine personal` (or `work`). Add a new machine by writing a new `settings/<name>.json` and running bootstrap with that name.
-
-**Work machine note:** the work machine has the repo at `~/GitHub/claude-config`, not `~/claude-config`. Create a symlink there so `$HOME/claude-config/bin/...` paths resolve:
-```bash
-ln -s ~/GitHub/claude-config ~/claude-config
-```
+`~/.claude/settings.json` is a symlink to a per-machine file in `~/claude-config/settings/`. Edit the per-machine file directly — use `realpath ~/.claude/settings.json` to confirm which one. See [[Claude Config Architecture]] for the full setup.
 
 ## API Debugging Strategy
 
-When a feature requires calling an external API and the correct request shape or behavior is unclear (underdocumented, multiple plausible approaches, or prior attempts failed silently), **write a throwaway Node.js probe script first before touching the plugin or app code.** The script should:
-
-1. Hit the API directly with the stored credentials (check `data.json`, `.env`, or token stores in the plugin/app directory).
-2. Try each candidate approach and read the response back to see what the API actually produced.
-3. Log the resulting document/resource state so the winning approach is confirmed before any code changes.
-
-Do not modify plugin source, rebuild, and reload Obsidian (or any host app) just to test an API hypothesis. One probe script iteration is faster than three plugin deploy cycles. This applies to Google Docs API, Drive API, Linear, Stripe, or any REST/GraphQL endpoint where behavior under edge cases is ambiguous.
+When an API's correct request shape is unclear, **write a throwaway Node.js probe script first** — before touching app code. The script should: (1) hit the API directly with stored credentials, (2) try each candidate approach, (3) log the response to confirm the winner. Never modify plugin source just to test an API hypothesis.
 
 ## Working Discipline (multi-step tasks)
 
