@@ -16,7 +16,7 @@ Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v
 
 `~/.claude/settings.json` is a symlink to a per-machine file in `~/claude-config/settings/`. Edit the per-machine file directly — use `realpath ~/.claude/settings.json` to confirm which one. See [[Claude Config Architecture]] for the full setup.
 
-## API Debugging Strategy
+## API Probing
 
 When an API's correct request shape is unclear, **write a throwaway Node.js probe script first** — before touching app code. The script should: (1) hit the API directly with stored credentials, (2) try each candidate approach, (3) log the response to confirm the winner. Never modify app code just to test an API hypothesis.
 
