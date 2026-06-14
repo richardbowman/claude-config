@@ -35,7 +35,7 @@ gws sheets spreadsheets get --params '{"spreadsheetId": "<id>"}'
 gws schema drive.files.create
 ```
 
-Authenticated account: `rbcodelabs@gmail.com`
+Authenticated account: `richard.bowman@gmail.com`
 
 ## Scripting Language
 
@@ -43,7 +43,7 @@ Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v
 
 ## Settings Files (per-machine, fully committed)
 
-Claude Code only supports **one** user-level settings file: `~/.claude/settings.json`. There is no user-level `settings.local.json` (only project-level). To support multiple machines without conflicts, this repo keeps a **complete settings file per machine** under `settings/`, and `bootstrap.js --machine <name>` symlinks the right one into `~/.claude/settings.json`.
+Claude Code only supports **one** user-level settings file: `~/.claude/settings.json`. To support multiple machines without conflicts, this repo keeps a **complete settings file per machine** under `settings/`, and `bootstrap.js --machine <name>` symlinks the right one into `~/.claude/settings.json`.
 
 | File | Purpose |
 |---|---|
