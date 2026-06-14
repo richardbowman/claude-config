@@ -10,7 +10,7 @@ Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `
 
 ## Google Workspace CLI (`gws`)
 
-Use the `gws` CLI for **all** Google Workspace operations. Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it. Authenticated account: `richard.bowman@gmail.com`
+Use the `gws` CLI for **all** Google Workspace operations. Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it.
 
 ## Scripting Language
 
