@@ -1,9 +1,5 @@
 # Claude Code — User-Level Guidelines
 
-## Skills
-
-Before writing shell commands or code, check the injected skills list and invoke the matching skill first using the `Skill` tool. Skills contain the correct recipes, gotchas, and exact flag syntax — do not improvise. Read the output and follow its recipes exactly.
-
 ## Web Browsing Escalation
 
 Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
@@ -24,28 +20,27 @@ Always write scripts in TypeScript/Node.js. Never use Python for scripts. Node v
 
 When an API's correct request shape is unclear, **write a throwaway Node.js probe script first** — before touching app code. The script should: (1) hit the API directly with stored credentials, (2) try each candidate approach, (3) log the response to confirm the winner. Never modify app code just to test an API hypothesis.
 
-## Working Discipline (multi-step tasks)
+## Task Procedure
 
-Follow this procedure exactly for every multi-step task. It is not optional. When spawning subagents for extended autonomous work, propagate this section into their prompts.
+Follow this procedure for every substantial task. It is not optional. When spawning subagents for extended autonomous work, propagate this section into their prompts.
 
-1. **Before writing any code**, use `TodoWrite` to create a task list with one item per requirement in the brief, plus a final item: "End-to-end verification of every requirement against the running system". All items start `pending`.
+1. **Check the skills list** and invoke any matching skill before writing commands or starting work.
 
-2. **Work one item at a time.** Mark the current item `in_progress` before starting it. After implementing each item:
-   a. Write an automated test for it.
-   b. Run the tests and watch them pass.
-   c. Only then mark it `completed` via `TodoWrite`.
+2. **Before starting work**, use `TodoWrite` to create a task list with one item per requirement, plus a final item: "End-to-end verification of every requirement". All items start `pending`.
 
-3. **After all items are completed except the last:** start the system for real and verify every requirement end-to-end with real requests (curl, fetch, a browser tool if one is available, or equivalent), exactly as a user would hit it. Then re-read the original brief line by line and confirm nothing was missed or misread. Fix anything that fails and re-verify. Only then mark the final item completed.
+3. **Work one item at a time.** Mark it `in_progress` before starting. After completing each item, verify it against its requirement (observed output, not assumption), then mark it `completed`.
 
-4. **Your final report must list each requirement** with how it was verified (test name or command, plus the observed result). Any requirement you did not verify must be listed as NOT VERIFIED. Do not summarize verification you did not perform.
+4. **After all items are completed except the last:** verify every requirement end-to-end exactly as a user would encounter it. Re-read the original brief line by line. Fix anything that fails and re-verify. Only then mark the final item completed.
+
+5. **Your final report must list each requirement** with how it was verified and the observed result. Any requirement not verified must be listed as NOT VERIFIED.
 
 Two principles govern everything above:
 
-- **Verified means observed. Nothing else counts.** Never report something done, fixed, or working unless you watched it work: ran the command, saw the test pass, read the output back. "Should work" is a prediction, not a result. A box may only be checked, and a claim only made, on observed evidence.
+- **Verified means observed.** Never report something done unless you watched it work. "Should work" is a prediction, not a result.
 
-- **Two failures means change strategy. Never loop.** Do not retry the same approach a third time unchanged. Read the full error, inspect actual system state, form a new hypothesis. If genuinely blocked, stop and report precisely: what you did, expected, got, and ruled out. Guessing to avoid reporting is failure.
+- **Two failures means change strategy.** Do not retry the same approach a third time. Read the error, inspect actual state, form a new hypothesis. If blocked, report precisely: what you did, expected, got, and ruled out.
 
-When you finish: clean up after yourself (kill processes you started, remove scratch files that are not deliverables) and leave the work tree in the state you would want to inherit.
+When you finish: clean up (kill processes you started, remove scratch files) and leave the work tree as you'd want to inherit it.
 
 ## Obsidian Daily Note Rule
 
