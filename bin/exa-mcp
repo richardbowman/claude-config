@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# exa-mcp — Launch Exa MCP server with API key pulled from Keeper at runtime
+#
+# Used as the MCP server command so the Exa API key never lives in a config file.
+# Keeper session must be active (keeper login rbowman@redventures.com).
+
+set -euo pipefail
+
+KEEPER=/opt/homebrew/Cellar/keeper-commander/17.2.15/libexec/bin/keeper
+EXA_RECORD_UID="gyZd1ofromDirkxCDZ5nsg"
+
+# Fetch the API key from Keeper
+EXA_API_KEY=$("$KEEPER" get "$EXA_RECORD_UID" --format json 2>/dev/null \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+fields = d.get('fields', [])
+for f in fields:
+    if f.get('type') == 'password':
+        vals = f.get('value', [])
+        if vals:
+            print(vals[0])
+            sys.exit(0)
+print('', end='')
+")
+
+if [[ -z "$EXA_API_KEY" ]]; then
+  echo "Error: could not retrieve Exa API key from Keeper (UID: $EXA_RECORD_UID)" >&2
+  echo "Ensure Keeper session is active: keeper login rbowman@redventures.com" >&2
+  exit 1
+fi
+
+export EXA_API_KEY
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+exec /opt/homebrew/bin/npx -y exa-mcp-server

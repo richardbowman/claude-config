@@ -1,19 +1,30 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --experimental-strip-types
 // Bootstrap this repo into ~/.claude and ~/.local/bin by symlinking.
 // Called by bootstrap.sh after it has verified Node is available.
 
-'use strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const fs = require('node:fs');
-const path = require('node:path');
-const os = require('node:os');
-const { spawnSync } = require('node:child_process');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
 const REPO        = path.dirname(fs.realpathSync(__filename));
 const HOME        = os.homedir();
 const CLAUDE      = path.join(HOME, '.claude');
 const SKILLS_BASE = path.join(HOME, '.agents', 'skills');
 const LOCAL_BIN   = path.join(HOME, '.local', 'bin');
+
+// --sync: pull the repo before doing anything else
+if (process.argv.includes('--sync')) {
+  console.log('==> Pulling latest (--sync)');
+  const r = spawnSync('git', ['-C', REPO, 'pull', '--ff-only'], { stdio: 'inherit' });
+  if (r.status !== 0) {
+    console.warn('    warning: git pull failed — continuing with existing copy');
+  }
+}
 
 for (const d of [
   CLAUDE,
@@ -27,8 +38,8 @@ for (const d of [
   fs.mkdirSync(d, { recursive: true });
 }
 
-function link(src, dst) {
-  let existing = null;
+function link(src: string, dst: string): void {
+  let existing: fs.Stats | null = null;
   try { existing = fs.lstatSync(dst); } catch { /* ENOENT */ }
 
   if (existing) {
@@ -48,8 +59,8 @@ function link(src, dst) {
     const type = fs.statSync(src).isDirectory() ? 'dir' : 'file';  // matters on Windows
     fs.symlinkSync(src, dst, type);
     console.log(`    link ${dst} -> ${src}`);
-  } catch (e) {
-    if (process.platform === 'win32' && e.code === 'EPERM') {
+  } catch (e: unknown) {
+    if (process.platform === 'win32' && (e as NodeJS.ErrnoException).code === 'EPERM') {
       console.error(`!! symlink denied on Windows — enable Developer Mode or run as Administrator`);
     }
     throw e;
@@ -66,8 +77,18 @@ console.log(`    target: ${CLAUDE}`);
 // settings file — there is no user-level settings.local.json, so we
 // keep one full file per machine instead of trying to merge layers.
 const machineIdx = process.argv.indexOf('--machine');
-const machine    = machineIdx !== -1 ? process.argv[machineIdx + 1] : null;
+let machine: string | null = machineIdx !== -1 ? process.argv[machineIdx + 1] : null;
 const settingsDir = path.join(REPO, 'settings');
+if (!machine) {
+  const sentinelPath = path.join(CLAUDE, '.machine');
+  try {
+    const val = fs.readFileSync(sentinelPath, 'utf8').trim();
+    if (val) {
+      machine = val;
+      console.log(`    machine: ${machine} (from ~/.claude/.machine)`);
+    }
+  } catch { /* ENOENT — no sentinel yet */ }
+}
 if (!machine) {
   console.error('!! --machine <name> is required');
   if (fs.existsSync(settingsDir)) {
@@ -118,7 +139,7 @@ if (fs.existsSync(binSrc)) {
     if (process.platform !== 'win32' && !(st.mode & 0o111)) continue;  // not executable
     link(src, path.join(LOCAL_BIN, name));
   }
-  if (!process.env.PATH.split(path.delimiter).includes(LOCAL_BIN)) {
+  if (!process.env.PATH!.split(path.delimiter).includes(LOCAL_BIN)) {
     console.log(`    note: add ${LOCAL_BIN} to PATH in your shell rc`);
   }
 }
@@ -160,19 +181,19 @@ const skillsTxt = path.join(REPO, 'skills.txt');
 if (fs.existsSync(skillsTxt)) {
   console.log('==> Checking third-party skills');
   const entries = fs.readFileSync(skillsTxt, 'utf8').split(/\r?\n/)
-    .map(l => l.split('#')[0].trim()).filter(Boolean);
+    .map((l: string) => l.split('#')[0].trim()).filter(Boolean);
 
   // Derive the installed skill directory name from an entry line.
   // If --skill <name> is present, that's the installed name; otherwise use
   // the basename of the repo URL/shorthand (strip .git suffix).
-  function skillName(entry) {
+  function skillName(entry: string): string {
     const m = entry.match(/--skill\s+(\S+)/);
     if (m) return m[1];
     const src = entry.split(/\s+/)[0];
     return path.basename(src).replace(/\.git$/, '');
   }
 
-  const missing = [];
+  const missing: string[] = [];
   for (const s of entries) {
     const name = skillName(s);
     if (fs.existsSync(path.join(CLAUDE, 'skills', name)) || fs.existsSync(path.join(SKILLS_BASE, name))) {
@@ -197,7 +218,7 @@ if (fs.existsSync(dotfilesSrc)) {
   console.log('==> Linking dotfiles');
   const configDir = path.join(HOME, '.config');
   fs.mkdirSync(configDir, { recursive: true });
-  function linkDotfiles(srcDir, dstDir) {
+  function linkDotfiles(srcDir: string, dstDir: string): void {
     fs.mkdirSync(dstDir, { recursive: true });
     for (const name of fs.readdirSync(srcDir)) {
       const src = path.join(srcDir, name);
@@ -234,3 +255,7 @@ if (fs.existsSync(shellSrc)) {
 
 console.log('==> Done');
 console.log(`    Active settings file: ${path.join(CLAUDE, 'settings.json')} -> ${settingsSrc}`);
+
+const sentinelPath = path.join(CLAUDE, '.machine');
+fs.writeFileSync(sentinelPath, machine, 'utf8');
+console.log(`    wrote ~/.claude/.machine = ${machine}`);

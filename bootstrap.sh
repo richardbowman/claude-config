@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Thin thunk: verify Node is present, then hand off to bootstrap.js.
-# All real logic lives in bootstrap.js.
+# Thin thunk: verify Node is present, then hand off to bootstrap.ts.
+# All real logic lives in bootstrap.ts.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -20,4 +20,4 @@ EOF
   exit 1
 fi
 
-exec node "$DIR/bootstrap.js" "$@"
+exec node --experimental-strip-types "$DIR/bootstrap.ts" "$@"

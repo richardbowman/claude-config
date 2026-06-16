@@ -12,8 +12,8 @@ Skills live in a separate repo: **[agent-skills](https://github.com/richardbowma
 - `scripts/` — shared TypeScript utilities (run via `npx tsx`)
 - `rules/` — custom CLAUDE.md-style rules synced to `~/.claude/rules/` (e.g., context7.md)
 - `bin/` — CLIs added to `~/.local/bin` on bootstrap
-- `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.js`
-- `bootstrap.js` — does the real work: symlinks settings/plugins/rules/bin into `~/.claude/`, clones + bootstraps `agent-skills`, installs third-party skills
+- `bootstrap.sh` — thin thunk that verifies Node is installed, then execs `bootstrap.ts`
+- `bootstrap.ts` — does the real work: symlinks settings/plugins/rules/bin into `~/.claude/`, clones + bootstraps `agent-skills`, installs third-party skills
 
 ## Skills
 
@@ -74,6 +74,7 @@ podman machine start
 
 ```sh
 ls -la ~/.claude/settings.json            # should be a symlink -> <projects-dir>/claude-config/settings.json
+cat ~/.claude/.machine                    # should print the machine name set during bootstrap
 ls ~/.claude/skills/                      # should list all synced skills
 nextdev doctor                            # should report node + brew-installed tools
 ```
@@ -82,7 +83,7 @@ nextdev doctor                            # should report node + brew-installed 
 
 ```sh
 git clone git@github.com:<user>/claude-config.git ~/Projects/claude-config   # any directory works
-~/Projects/claude-config/bootstrap.sh
+node --experimental-strip-types ~/Projects/claude-config/bootstrap.ts --machine <name>
 ```
 
 **Prereq: Node 18+.** If `node` isn't on PATH, `bootstrap.sh` prints install instructions and exits. Recommended:
