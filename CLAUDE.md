@@ -45,3 +45,7 @@ When you finish: clean up (kill processes you started, remove scratch files) and
 ## Obsidian Daily Note Rule
 
 Whenever you create a new file in the Obsidian vault (`~/Documents/Personal/`), always add a wikilink to it in that day's daily note at `~/Documents/Personal/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
+
+## Vault Bridge Sync
+
+Some vault folders are backed by git repos via the Vault Bridges plugin. After writing or editing any file in a bridged vault folder, invoke the `vault-bridge` skill to push the change to the git repo. Never manually `cp` between vault and repo. Never use raw `git` commands against the repo after writing to the vault — the bridge command handles commit and push.
