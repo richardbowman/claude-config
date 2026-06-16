@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_REAL="$(realpath "${BASH_SOURCE[0]}")"
+REPO_DIR="$(cd "$(dirname "$SCRIPT_REAL")/.." && pwd)"
+exec node --experimental-strip-types "$REPO_DIR/bootstrap.ts" --sync "$@"

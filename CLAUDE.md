@@ -4,6 +4,23 @@
 
 Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
 
+## Interactive Browser Testing
+
+**When you need to test interactive UI features** (click buttons, fill forms, verify modals open, test JavaScript interactions), use the `agent-browser` skill. Do NOT claim features are "fully tested" based only on:
+- TypeScript compilation passing
+- Dev server starting
+- Checking static HTML output with `curl`
+- Opening a URL in a browser without interaction
+
+Use `agent-browser` for:
+- Clicking UI elements and verifying results
+- Testing modals, dropdowns, form submissions
+- Verifying JavaScript-driven behavior
+- Taking screenshots after interactions
+- Testing multi-step user flows
+
+Example: After building a modal component, use `agent-browser` to click the trigger button, verify the modal opens, test the close button, and confirm no console errors.
+
 ## Google Workspace CLI (`gws`)
 
 Use the `gws` CLI for **all** Google Workspace operations. Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it.
