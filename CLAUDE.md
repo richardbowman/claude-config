@@ -42,9 +42,9 @@ Two principles govern everything above:
 
 When you finish: clean up (kill processes you started, remove scratch files) and leave the work tree as you'd want to inherit it.
 
-## Obsidian Daily Note Rule
+## Daily Note Rule
 
-Whenever you create a new file in the Obsidian vault (`~/Documents/Personal/`), always add a wikilink to it in that day's daily note at `~/Documents/Personal/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
+Whenever you create a new file in the vault (`~/Documents/Personal/`, opened in Geode), always add a wikilink to it in that day's daily note at `~/Documents/Personal/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
 
 ## Database Stack — Aurora DSQL (Non-Negotiable)
 

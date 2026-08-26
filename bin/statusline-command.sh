@@ -11,7 +11,7 @@
 # stdout: [{ "label": "...", "url": "...", "kind": "...", "tone": "..." }, ...]
 #
 # Requires: jq, git, gh (and optionally aws). The plugin prepends the common
-# Homebrew/local bin dirs to PATH, so these resolve under Obsidian's exec env.
+# Homebrew/local bin dirs to PATH, so these resolve under Geode's exec env.
 
 input=$(cat)
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // empty')

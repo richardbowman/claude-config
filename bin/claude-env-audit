@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * claude-env-audit — snapshot every editable injection layer for the current
- * Claude Code + Obsidian Claude Threads session on this machine.
+ * Claude Code + Geode Claude Threads session on this machine.
  *
  * Usage:
  *   ~/claude-config/bin/claude-env-audit             # print to stdout
@@ -105,12 +105,12 @@ out.push(header('Layer 6: Plugin --append-system-prompt (static template)'));
 out.push(`# Source: ~/projects/obsidian-claude-threads/src/ThreadManager.ts`);
 out.push(`# buildEnvironmentSystemPrompt() always injects:`);
 out.push(`
-  "You are running inside the Obsidian Claude Threads plugin."
+  "You are running inside the Geode Claude Threads plugin."
   "Vault root (filesystem path): <vaultRoot>"
   "Working directory: <thread.cwd>"
-  "Path semantics: obsidian_* use vault-relative, filesystem tools use absolute paths"
+  "Path semantics: vault_*/workspace_*/threads_* use vault-relative, filesystem tools use absolute paths"
   "Conversation history: completed threads saved to <vaultFolder>/YYYY-MM-DD-<slug>.md"
-  "Tool notes: set_working_directory, enter/exit_worktree, ScheduleWakeup, obsidian_*"
+  "Tool notes: set_working_directory, enter/exit_worktree, ScheduleWakeup, host_*"
 
 Conditional additions:
   - project.description  (if thread has a project with a description)
@@ -118,7 +118,7 @@ Conditional additions:
 
 To inspect the live assembled version for a specific thread, read the raw session log:
   ~/.claude/projects/<hash>/<session>/  (session_start events contain the full prompt)
-  Or use: obsidian_get_thread_log with type: "session_start"
+  Or use: threads_get_log with type: "session_start"
 `);
 
 // --- Layer 7: Skills ---
@@ -168,14 +168,14 @@ try {
   const keys = Object.keys(mcpServers);
   if (keys.length === 0) {
     out.push('No MCP servers in settings.json.');
-    out.push('(Plugin in-process MCP server is always registered at runtime as the "obsidian" namespace)');
+    out.push('(Plugin in-process MCP server is always registered at runtime as the "claude_threads" namespace; "obsidian" is kept as a deprecated compatibility alias)');
   } else {
     out.push(`${keys.length} MCP server(s) in settings.json:`);
     for (const [k, v] of Object.entries(mcpServers)) {
       out.push(`  ${k}: type=${v.type ?? '?'}`);
     }
   }
-  out.push(`\nPlugin in-process MCP: always registered as "mcp__obsidian__*" namespace`);
+  out.push(`\nPlugin in-process MCP: always registered as "mcp__claude_threads__*" namespace ("mcp__obsidian__*" kept as a deprecated alias)`);
 } catch {
   out.push(`[could not read settings.json at ${settingsPath}]`);
 }
