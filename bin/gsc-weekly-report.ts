@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * GSC Weekly Report — pulls Search Console data for trustandwillguide.com
- * and writes a summary note to the Obsidian vault.
+ * and writes a summary note to the vault.
  *
  * Reads credentials from 1Password ("GSC livegolden").
- * Scheduled weekly via Obsidian Claude Threads cron.
+ * Scheduled weekly via Geode Claude Threads cron.
  */
 import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
