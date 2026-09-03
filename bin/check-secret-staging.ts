@@ -6,13 +6,18 @@
  * .env files frequently contain real secrets; staging them (even accidentally)
  * can lead to secret exposure in git history.
  *
+ * Committed template files (.env.example, .env.sample, .env.template) are exempt —
+ * they document expected keys and must never contain real secret values.
+ *
  * Allowed:
  *   git add apps/web/lib/db.ts          (specific file, not .env)
  *   git add packages/domain/src/schema.prisma
+ *   git add .env.example                (template file, no real secrets)
+ *   git add apps/web/.env.sample
  *
  * Blocked:
  *   git add .env                        (direct .env staging)
- *   git add .env.local                  (any .env variant)
+ *   git add .env.local                  (any other .env variant)
  *   git add -A                          (stage everything)
  *   git add .                           (stage everything in cwd)
  *   git add --all                       (stage everything)
@@ -57,16 +62,29 @@ async function main() {
     process.exit(2);
   }
 
-  // Block: git add <anything>.env*
-  if (/\bgit\s+add\b.*\.env/.test(cmd)) {
-    const out = {
-      decision: "block",
-      reason:
-        "Refusing to stage .env file(s) — these files may contain real secrets. " +
-        "Add them to .gitignore and never commit them.",
-    };
-    process.stdout.write(JSON.stringify(out) + "\n");
-    process.exit(2);
+  // Block: git add <anything>.env* — except committed template files
+  // (.env.example, .env.sample, .env.template), which must never contain
+  // real secret values and are meant to be checked in.
+  const ALLOWED_ENV_SUFFIX = /\.env\.(example|sample|template)$/i;
+  const ENV_TOKEN = /\.env(\.\S+)?$/i;
+
+  if (/\.env/i.test(cmd)) {
+    const tokens = cmd.split(/\s+/).filter(Boolean);
+    const offending = tokens.filter(
+      (t) => ENV_TOKEN.test(t) && !ALLOWED_ENV_SUFFIX.test(t),
+    );
+
+    if (offending.length > 0) {
+      const out = {
+        decision: "block",
+        reason:
+          `Refusing to stage .env file(s): ${offending.join(", ")} — these may contain real secrets. ` +
+          "Add them to .gitignore and never commit them. " +
+          "(.env.example / .env.sample / .env.template are allowed since they must never hold real secrets.)",
+      };
+      process.stdout.write(JSON.stringify(out) + "\n");
+      process.exit(2);
+    }
   }
 
   process.exit(0);

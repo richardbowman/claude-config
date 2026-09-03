@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/claude-config/bin/check-secret-staging.ts",
+            "command": "$HOME/GitHub/claude-config/bin/check-secret-staging.ts",
             "statusMessage": "Checking for secret staging..."
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/claude-config/bin/check-aws-auth",
+            "command": "$HOME/GitHub/claude-config/bin/check-aws-auth",
             "statusMessage": "Checking AWS authentication..."
           }
         ]
@@ -52,7 +52,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash $HOME/claude-config/bin/statusline-command.sh"
+    "command": "bash $HOME/GitHub/claude-config/bin/statusline-command.sh"
   },
   "enabledPlugins": {
     "obsidian@obsidian-skills": true,
