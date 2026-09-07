@@ -42,9 +42,29 @@ Two principles govern everything above:
 
 When you finish: clean up (kill processes you started, remove scratch files) and leave the work tree as you'd want to inherit it.
 
+## Vault Path
+
+The vault — opened in Geode — is:
+
+```
+/Users/rickbowman/Library/Mobile Documents/com~apple~CloudDocs/Documents/Personal
+```
+
+It is the folder containing `.obsidian/`, `Daily/`, and `Products/`. The path
+contains spaces — quote it in shell commands.
+
+**`~/Documents/Personal` is NOT the vault.** A directory does exist there, and it
+is a partial shadow: it has `X Bookmarks/` and a `.geode/` config dir, but no
+`Daily/`, no `Products/`, and no `.obsidian/`. So a lookup there fails with
+`No such file or directory` rather than an obvious wrong-place error, and writes
+land somewhere nothing else reads. If a vault lookup comes back empty,
+**re-check the path before concluding the file is missing** — treating a failed
+lookup as evidence of absence has already produced a false "this work was never
+verified" claim that had to be retracted from Compass.
+
 ## Daily Note Rule
 
-Whenever you create a new file in the vault (`~/Documents/Personal/`, opened in Geode), always add a wikilink to it in that day's daily note at `~/Documents/Personal/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
+Whenever you create a new file in the vault, always add a wikilink to it in that day's daily note at `<vault>/Daily/YYYY-MM-DD.md`. Add the link under a `## Claude Sessions` section (create the section if it doesn't exist). If today's daily note doesn't exist yet, create it using the weekday template structure (Meetings / Work Projects / Personal Projects / Ideas / Claude Sessions / Remember).
 
 ## Database Stack — Aurora DSQL (Non-Negotiable)
 
@@ -54,9 +74,9 @@ This stack uses **Aurora DSQL with Vercel OIDC authentication**. This is the dec
 - If database issues arise (connection errors, IAM failures, migration problems), **fix the DSQL/IAM setup**. Diagnose the root cause: trust policy conditions, OIDC subject claims, adapter configuration, schema issues. Do not suggest switching providers.
 - The env vars (`PGHOST`, `PGUSER`, `PGDATABASE`, `PGPORT`, `PGSSLMODE`, `AWS_ROLE_ARN`, `AWS_REGION`) are set correctly for Aurora DSQL. If they seem unusual compared to other stacks, that is expected — Aurora DSQL uses IAM/OIDC auth, not a connection string.
 
-## Vault Bridge Sync
+## Repository Workflows
 
-Some vault folders are backed by git repos via the Vault Bridges plugin. After writing or editing any file in a bridged vault folder, invoke the `vault-bridge` skill to push the change to the git repo. Never manually `cp` between vault and repo. Never use raw `git` commands against the repo after writing to the vault — the bridge command handles commit and push.
+Use the backing Git repository as the canonical source for repository-owned files. Make changes in an isolated worktree on a feature branch, then use normal Git commits, pushes and pull requests. Preserve unrelated changes. Vault copies are optional reference mirrors; Vault Bridges is not required for editing, publication or delivery. Do not block work on bridge availability or automatically publish via bridge commands. Invoke vault-bridge only when explicitly asked to synchronize a mirror; older mandatory bridge instructions are superseded. Ordinary vault notes remain editable in the vault. Reconcile vault-only repository edits into the worktree deliberately before committing.
 
 ## QA / Visual Verification Reporting
 
@@ -77,15 +97,20 @@ The fix has to happen at call time, every time:
   prompt I give it must explicitly override the default and instruct it to
   write a persistent report before returning — do not rely on the subagent's
   own judgment to do this unprompted.
-- Report goes in the project's per-run vault note:
-  `~/Documents/Personal/Products/<Project>/Runs/<project-slug>-<YYYY-MM-DD>-*.md`
+- Report goes in the project's per-run vault note, resolved against the real vault
+  root (see "Vault Path" above — NOT `~/Documents/Personal`):
+  `<vault>/Products/<Project>/Runs/<project-slug>-<YYYY-MM-DD>-*.md`
   (today's date; append to the existing note for today if one exists, else
   create one) — under a `## QA Report — <HH:MM>` section: what was tested,
   method (automated command + pass/fail counts, or manual/visual tool used),
   explicit pass/fail per item, and anything not verified called out as NOT
   VERIFIED.
+- Record only OBSERVED output — paste the real pass/fail counts from commands you
+  actually ran this session. Never carry results over from a prior session, a
+  summary, or memory. If a gate did not run, or ran dirty, say so instead of
+  reporting a pass.
 - Screenshots must be **embedded as actual images**, not described in prose.
-  Save under `~/Documents/Personal/Attachments/QA/<Project>/<YYYY-MM-DD>-<slug>/`
+  Save under `<vault>/Attachments/QA/<Project>/<YYYY-MM-DD>-<slug>/`
   and embed with `![[Attachments/QA/<Project>/.../file.png]]`.
 - The subagent's final message back to me must state the exact vault path it
   wrote to — that path is the only durable evidence the work happened.
