@@ -47,9 +47,22 @@ Browser automation runs **headless**. A window appearing on screen during an aut
 
 Same rule for Electron E2E: launch hidden/offscreen rather than letting the app window appear.
 
-## Google Workspace CLI (`gws`)
+## Google Workspace (MCP tools + `gws` CLI)
 
-Use the `gws` CLI for **all** Google Workspace operations. Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it.
+Two paths exist. Choose by service first, then by operation.
+
+**Prefer the `mcp__google-*` tools** for Drive, Docs, Sheets, and Slides whenever they cover the operation you need. They take and return structured JSON — no shell hop, no quoting hazards, no output parsing — and are already authenticated. The full surface is 18 tools:
+
+- **`google-drive`** — `search_files`, `read_file_content`, `download_file_content`, `get_file_metadata`, `get_file_permissions`, `list_recent_files`, `create_file`, `copy_file`
+- **`google-docs`** — `read_doc`, `update_doc`
+- **`google-sheets`** — `get_spreadsheet`, `get_values`, `update_values`, `update_formulas`, `update_spreadsheet`, `insert_dimension`
+- **`google-slides`** — `read_presentation`, `update_presentation`
+
+**Use `gws` for every other service.** This is the default path, not the exception — MCP covers 4 of ~18 Workspace services. **Gmail, Calendar, Tasks, Chat, Meet, Keep, Forms, People, Script, Classroom, and Admin/Reports have no MCP tools at all.** Don't go hunting for them; reach for `gws` directly.
+
+**Use `gws` on the four covered services too** for anything the list above omits — notably **sharing and permission writes, deletes and trashing, shared-drive management, comments and replies, revision history, and `watch`/changes subscriptions**. `get_file_permissions` is read-only, so there is no MCP path to share a file or manage a shared drive. `gws drive` alone exposes ~50 methods against those 8 MCP tools.
+
+Never use raw `curl`, `rclone`, or `gdrive` — `gws` is already authenticated. Use `gws schema <service>.<resource>.<method>` to discover any method's parameters before calling it.
 
 ## Scripting Language
 
