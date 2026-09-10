@@ -146,8 +146,28 @@ fi
 # The plugin passes the active provider on stdin; skip the check otherwise so a
 # logged-out AWS session doesn't show a spurious "AWS expired" pill.
 if [ "$provider" = "bedrock" ] && command -v aws >/dev/null 2>&1; then
-  if aws sts get-caller-identity --query Account --output text >/dev/null 2>&1; then
+  # This script is spawned by a NON-INTERACTIVE shell, which never sources
+  # ~/.zshrc — where AWS_PROFILE is exported. With no AWS_PROFILE and no
+  # [default] profile in ~/.aws/config, `aws sts` fails with NoCredentials,
+  # which is NOT the same thing as an expired SSO token. Resolve a profile
+  # first, so a perfectly healthy Bedrock session isn't reported as expired.
+  if [ -z "$AWS_PROFILE" ] && [ -z "$AWS_DEFAULT_PROFILE" ]; then
+    prof=$(sed -n "s/^[[:space:]]*export[[:space:]]\{1,\}AWS_PROFILE=//p" \
+             "$HOME/.zshrc" 2>/dev/null | tail -1 | tr -d "\"'")
+    if [ -z "$prof" ]; then
+      # fall back to the sole configured profile, if there is exactly one
+      names=$(sed -n 's/^\[profile \(.*\)\]$/\1/p' "$HOME/.aws/config" 2>/dev/null)
+      [ "$(printf '%s\n' "$names" | grep -c .)" = "1" ] && prof="$names"
+    fi
+    [ -n "$prof" ] && export AWS_PROFILE="$prof"
+  fi
+
+  if aws_err=$(aws sts get-caller-identity --query Account --output text 2>&1); then
     add "$(jq -nc '{label:"AWS ok",kind:"aws"}')"
+  elif printf '%s' "$aws_err" | grep -qiE 'NoCredentials|Unable to locate credentials|profile .* could not be found'; then
+    # No usable profile reached this process — a config/plumbing problem,
+    # distinct from an expired token. `aws sso login` will NOT fix this.
+    add "$(jq -nc '{label:"AWS not configured",tone:"warn",kind:"aws"}')"
   else
     add "$(jq -nc '{label:"AWS expired",tone:"warn",kind:"aws"}')"
   fi
