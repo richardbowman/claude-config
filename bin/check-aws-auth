@@ -1,9 +1,59 @@
 #!/usr/bin/env bash
-# Blocks Claude from starting if AWS SSO session is not active.
-# Re-authenticate with: aws sso login
+#
+# SessionStart hook: blocks Claude from starting when it routes through Bedrock
+# but AWS credentials aren't usable.
+#
+# Three failure modes this guards against — the first is the same bug that had
+# the statusline reporting "AWS expired" on a perfectly healthy session:
+#
+#   1. AWS_PROFILE is exported from ~/.zshrc, an *interactive* shell file. A
+#      non-interactive spawn never sources it, and ~/.aws/config has no
+#      [default] profile. A bare credential check therefore fails with
+#      NoCredentials — which is NOT an expired token, and is NOT fixed by
+#      `aws sso login`. Blocking startup with that remedy sends you in circles.
+#   2. Gating the session on AWS when Claude isn't using Bedrock is pure
+#      downside: a stale SSO session would refuse every session start for no
+#      reason. CLAUDE_CODE_USE_BEDROCK tells us whether AWS matters at all.
+#   3. If `aws` isn't on PATH, a bare check fails indistinguishably from bad
+#      credentials — blocking startup on a toolchain problem while advising a
+#      login. A missing binary means "cannot verify", not "not authenticated".
+#
+# Diagnostics go to stderr so they reach the human. SessionStart stdout is
+# injected into Claude's context instead of being displayed, which is the wrong
+# channel for "here is how to fix your machine".
 
-if ! aws sts get-caller-identity --output text &>/dev/null; then
-  echo "ERROR: Not logged in to AWS (profile: ${AWS_PROFILE:-default})"
-  echo "Run: aws sso login"
-  exit 1
+# (2) Only AWS-gate the session when Claude actually routes through Bedrock.
+[ -z "$CLAUDE_CODE_USE_BEDROCK" ] && exit 0
+
+# (3) Missing binary is a toolchain problem, not an auth failure. Warn, allow.
+if ! command -v aws >/dev/null 2>&1; then
+  echo "WARNING: CLAUDE_CODE_USE_BEDROCK is set but the aws CLI is not on PATH." >&2
+  echo "         Skipping the credential check rather than blocking startup." >&2
+  exit 0
 fi
+
+# (1) Resolve a profile if this process didn't inherit one.
+if [ -z "$AWS_PROFILE" ] && [ -z "$AWS_DEFAULT_PROFILE" ]; then
+  prof=$(sed -n "s/^[[:space:]]*export[[:space:]]\{1,\}AWS_PROFILE=//p" \
+           "$HOME/.zshrc" 2>/dev/null | tail -1 | tr -d "\"'")
+  if [ -z "$prof" ]; then
+    # fall back to the sole configured profile, if there is exactly one
+    names=$(sed -n 's/^\[profile \(.*\)\]$/\1/p' "$HOME/.aws/config" 2>/dev/null)
+    [ "$(printf '%s\n' "$names" | grep -c .)" = "1" ] && prof="$names"
+  fi
+  [ -n "$prof" ] && export AWS_PROFILE="$prof"
+fi
+
+aws_err=$(aws sts get-caller-identity --query Account --output text 2>&1) && exit 0
+
+if printf '%s' "$aws_err" | grep -qiE 'NoCredentials|Unable to locate credentials|profile .* could not be found'; then
+  echo "ERROR: No usable AWS credentials could be resolved." >&2
+  echo "       No profile is set in this process and none could be inferred." >&2
+  echo "       This is a configuration problem — 'aws sso login' will NOT fix it." >&2
+  echo "       Set AWS_PROFILE (names are in ~/.aws/config) or add a [default] profile." >&2
+else
+  echo "ERROR: AWS session is not active (profile: ${AWS_PROFILE:-unset})" >&2
+  printf '       %s\n' "$(printf '%s' "$aws_err" | tail -1)" >&2
+  echo "       Run: aws sso login" >&2
+fi
+exit 1
