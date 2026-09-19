@@ -222,30 +222,19 @@ When you finish: clean up (kill processes you started, remove scratch files) and
 
 ## Vault Path
 
-The vault — opened in Geode — is:
+**Never hard-code a vault root — not in a skill, not in a hook, not here.** The
+runtime supplies it: the session context names the vault root, and `vault_*`
+tools take vault-relative paths. Write `Daily/YYYY-MM-DD.md`, not an absolute
+path. A written-down root is redundant where it's right, silently wrong
+everywhere else, and it pins the instruction to one machine and one vault.
 
-```
-/Users/rickbowman/Library/Mobile Documents/com~apple~CloudDocs/Documents/Personal
-```
+When you do need the root in a shell command, read it from the session context
+rather than recalling one, and quote it — vault paths routinely contain spaces.
 
-It is the folder containing `.obsidian/`, `Daily/`, and `Products/`. The path
-contains spaces — quote it in shell commands.
-
-**`~/Documents/Personal` is NOT the vault.** A directory does exist there, and it
-is a partial shadow: it has `X Bookmarks/` and a `.geode/` config dir, but no
-`Daily/`, no `Products/`, and no `.obsidian/`. So a lookup there fails with
-`No such file or directory` rather than an obvious wrong-place error, and writes
-land somewhere nothing else reads. If a vault lookup comes back empty,
-**re-check the path before concluding the file is missing** — treating a failed
-lookup as evidence of absence has already produced a false "this work was never
-verified" claim that had to be retracted from Compass.
-
-This path is specific to the machine where the "Personal" vault lives under iCloud.
-On a different machine (or a different vault entirely, e.g. the BankRate
-consulting vault, which has its own project-level `CLAUDE.md` and lives at a
-different, non-iCloud path), confirm the actual vault root rather than assuming
-this one — the underlying lesson (verify before concluding a lookup miss means
-"missing") generalizes even where the literal path doesn't.
+**If a vault lookup comes back empty, re-check the path before concluding the
+file is missing.** Treating a failed lookup as evidence of absence has already
+produced a false "this work was never verified" claim that had to be retracted
+from Compass.
 
 ## Daily Note Rule
 
