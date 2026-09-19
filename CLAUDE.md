@@ -134,6 +134,40 @@ Before editing, if another thread is already running against the same working di
 
 Corollary: a red typecheck or failing test in a tree another live thread is editing is **someone's in-flight edit, not a bug.** Report it as a collision. Do not investigate it, and do not fix it — the owning thread will.
 
+## Machine Capacity
+
+This machine has **10 cores and 16 GB of RAM**, and it is routinely asked to run far more than that. A real incident: 15 concurrent Claude sessions drove the load average to **44** and swap to **16.2 GB of 17.4 GB**, and the machine began crashing. Each session had spun up its own worktree, `node_modules`, `tsc`, dev server, and Playwright run.
+
+**Check the load before starting anything expensive.** Expensive means: a test suite, an E2E run, a production build, `tsc` over a large project, or a dev server.
+
+```bash
+# Healthy when the 1-min average is below the core count.
+uptime; sysctl -n hw.ncpu
+```
+
+- **1-min load < cores** → proceed normally.
+- **1-min load 1–2× cores** → run the one thing you need, not the full gate. Skip E2E.
+- **1-min load > 2× cores** → **stop and tell the user the machine is saturated.** Do not queue more work onto it and do not "just try it anyway" — you will be the process that tips it into swap death. Report the load and say what you were about to run.
+
+**Do not start a background build or dev server you are not about to read the output of.** An unattended `next dev` costs ~290 MB and runs until something kills it.
+
+**Cost is per-session, not per-machine.** Ten sessions each "just running a quick typecheck" is ten full TypeScript programs resident at once. Before adding a session, ask whether an existing thread could do the work instead.
+
+**Clean up before you finish.** Stop dev servers via `nextdev stop` (never `pkill`), close every `agent-browser` session you opened by name, and do not leave Playwright workers running. Leaked processes from finished tasks are the single largest recurring cause of saturation here — sessions from *two days prior* have been found alive.
+
+### Keep each session's builds cheap
+
+- **Playwright defaults to `workers: "50%"` of cores** — 5 workers on this machine, each with its own browser. That is a ~350 MB, 5-core spike from one command.
+
+  **There is no env var for this.** Verified against Playwright 1.63.0 source (`lib/common/config.js`): the precedence is `--debug`/`--pause` → the `--workers` CLI flag → `workers` in `playwright.config.ts` → `"50%"`. No `PLAYWRIGHT_WORKERS` exists, and setting one is silently ignored — the run still spawns 5 workers while you believe it spawned 2.
+
+  Cap it one of two ways, both of which accept a percentage:
+  - Ad hoc: `npx playwright test --workers=2`
+  - Persistent: `workers: process.env.CI ? 1 : '20%'` in `playwright.config.ts`
+- **Prefer the narrowest command.** `tsc --noEmit` on one project beats a repo-wide build; a single spec file beats the suite. Run the broad gate once at the end, not repeatedly along the way.
+- **Prototype mode already says skip the gate** — honor it. The per-change full test run is exactly the waste that saturates this box.
+- **Reuse a running dev server** instead of starting a second one on another port. Check `nextdev list` first.
+
 ## Task Procedure
 
 Follow this procedure for every substantial task on production code. It is not optional. On prototype repos, see **Prototype Mode** above — steps 2–5 still apply, but the per-change verification in step 3 collapses to "does the page render", and the full gate moves to milestones. When spawning subagents for extended autonomous work, propagate this section into their prompts.
