@@ -25,12 +25,11 @@
       "WebFetch",
       "WebSearch"
     ],
-    "defaultMode": "bypassPermissions",
+    "defaultMode": "auto",
     "additionalDirectories": [
       "/Users/rickbowman"
     ]
   },
-  "skipDangerousModePermissionPrompt": true,
   "model": "sonnet",
   "hooks": {
     "PreToolUse": [
@@ -41,6 +40,18 @@
             "type": "command",
             "command": "bash $HOME/.claude/hooks/require-worktree.sh",
             "statusMessage": "Checking worktree..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r 'if ((.tool_input.command // \"\") | test(\"git push\")) then {\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"QA RUN NOTE — MANDATORY after any git push: write the run note to the vault-relative path Products/<Project>/Runs/<project-slug>-<YYYY-MM-DD>-<pr-or-topic>.md (append to the note for today if one exists, else create it). Resolve that against the REAL vault root — on this machine that is /Users/rickbowman/Library/Mobile Documents/com~apple~CloudDocs/Documents/Personal, NOT ~/Documents/Personal, which is a different directory that silently shadows the vault. Verify the file landed in the vault before reporting. under a heading of the form: ## QA Report — <HH:MM>. Record only OBSERVED output — paste the real pass/fail counts from commands you actually ran this session; never carry results over from a prior session, a summary, or memory. Mark anything unverified as NOT VERIFIED. Embed screenshots as images from Attachments/QA/<Project>/<YYYY-MM-DD>-<slug>/. Add a wikilink to the note in Daily/<YYYY-MM-DD>.md under ## Claude Sessions. State the exact vault path you wrote in your reply — that path is the only durable evidence the work happened.\"}} | tojson else empty end'",
+            "timeout": 5
           }
         ]
       }
@@ -73,7 +84,8 @@
     "command": "bash $HOME/claude-config/bin/statusline-command.sh"
   },
   "enabledPlugins": {
-    "obsidian@obsidian-skills": true
+    "obsidian@obsidian-skills": true,
+    "compass@compass": true
   },
   "extraKnownMarketplaces": {
     "obsidian-skills": {
@@ -82,12 +94,34 @@
         "repo": "kepano/obsidian-skills"
       },
       "autoUpdate": true
+    },
+    "compass": {
+      "source": {
+        "source": "github",
+        "repo": "rbcodelabs/compass"
+      }
     }
   },
+  "tui": "fullscreen",
+  "skipDangerousModePermissionPrompt": true,
   "mcpServers": {
     "helio": {
       "type": "http",
-      "url": "http://localhost:3008/api/mcp"
+      "url": "https://helios.rbcodelabs.com/api/mcp"
+    },
+    "compass": {
+      "type": "http",
+      "url": "https://compass.rbcodelabs.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${COMPASS_MCP_API_KEY}"
+      }
+    },
+    "hiptrip": {
+      "type": "http",
+      "url": "https://www.yourhiptrip.com/api/mcp",
+      "headers": {
+        "x-api-key": "${HIPTRIP_MCP_KEY}"
+      }
     }
   }
 }

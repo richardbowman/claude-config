@@ -4,6 +4,24 @@
 
 Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
 
+### Always close your browser session
+
+`agent-browser` runs a supervising daemon behind each Chrome instance. If the session is never closed, the daemon outlives the task, holds a ~17MB temp profile, and keeps ~12 Chrome processes alive indefinitely. Force-killing Chrome does **not** fix this: the daemon survives and leaks the profile dir. These accumulate silently across a day until the machine is covered in "Chrome for Testing" windows.
+
+So: **any agent that launches `agent-browser` must close its own session before returning.** Use a named session and close that name:
+
+```bash
+agent-browser --session <name> open <url>
+# ... work ...
+agent-browser --session <name> close
+```
+
+Propagate this into subagent prompts whenever you spawn one that may browse — subagents do not clean up on exit, and their leaked daemons are invisible until someone looks at `ps`.
+
+**Never call `agent-browser close --all` from inside an agent or a hook.** It closes *every* session on the machine, including ones belonging to concurrently running agents and any browser the user is mid-task with. `close --all` is a human-invoked recovery command only, for when sessions have already leaked.
+
+To clean up leaked sessions manually: `agent-browser close --all` (this also garbage-collects the temp profile dirs; killing Chrome by PID does not).
+
 ## Interactive Browser Testing
 
 **When you need to test interactive UI features** (click buttons, fill forms, verify modals open, test JavaScript interactions), do NOT run `agent-browser` inline yourself. Delegate to the `qa-engineer` subagent instead — it owns the full verification protocol (loading agent-browser skills, running the interaction steps, what counts as a pass) and reports back only a terse PASS/FAIL verdict, keeping screenshots/DOM dumps/click logs out of your context entirely.
@@ -40,7 +58,15 @@ Browser automation runs **headless**. A window appearing on screen during an aut
 
 **Auth is the reason agents reach for `--headed`, and it is a solved problem.** Vercel Deployment Protection (SSO) bounces anonymous requests with a 302 to `vercel.com/sso-api`, and the tempting fix is a headed real-Chrome login. Escalate in this order instead, stopping at the first that works:
 
-1. **Vercel protection-bypass secret** — fully headless, no login at all. `PATCH /v1/projects/{id}/protection-bypass` with body `{}` to generate (a caller-supplied `generatedSecret` is rejected with a 400), then pass the secret as a **query param**, not a header. Revoke when done — and note revocation takes ~20–40s to reach the edge, so re-test until you *observe* the 302 rather than trusting the control plane's `protectionBypass: {}`.
+1. **Vercel protection-bypass secret** — fully headless, no login at all.
+
+   **Check for an existing one before generating anything.** Long-lived secrets are already registered for some projects and stored two ways: a harness env var (e.g. `COMPASS_VERCEL_BYPASS_SECRET`) and a 1Password item (e.g. *"Compass - Vercel Automation Bypass Secret"*). Generating a fresh secret when one already exists is wasted work and churns the edge.
+
+   **1Password field trap:** these items store the value under the field **`credential`**, *not* `password`. `op item get <id> --fields password --reveal` returns an **empty string silently** — the request then goes out with a blank bypass and comes back as a 302, which reads exactly like an auth failure rather than a lookup mistake. Use `--fields credential`, and sanity-check the length before using it.
+
+   To generate one only if none exists: `PATCH /v1/projects/{id}/protection-bypass` with body `{}` (a caller-supplied `generatedSecret` is rejected with a 400). Revoke when done — revocation takes ~20–40s to reach the edge, so re-test until you *observe* the 302 rather than trusting the control plane's `protectionBypass: {}`.
+
+   **Passing it:** the **header** `x-vercel-protection-bypass: <secret>` works and is what Vercel and the 1Password items prescribe; the query param of the same name also works. **The real gotcha is the redirect, not the placement.** If you also send `x-vercel-set-bypass-cookie: true`, the edge answers with a **307 self-redirect** to the same path in order to set the cookie. That 307 is *success mid-handshake*, not a failure — follow it (`curl -L` with a cookie jar, `-c`/`-b`) and you land on 200. Reading that 307 as "still blocked" and escalating to a headed browser is the exact wrong turn this ladder exists to prevent. Diagnostic tell: **302 → `vercel.com/sso-api`** means the secret was missing/blank/wrong; **307 → same path** means it was accepted.
 2. **Saved auth state** — `agent-browser auth save` / `--state <path>` / `--restore`. One interactive login, reused headlessly indefinitely.
 3. **`--headers`** for token-authenticated endpoints.
 4. **Ask the user.** If none of the above works, say so and stop. Never fall back to a headed window on your own initiative.
@@ -107,6 +133,40 @@ In prototype mode, these four things change:
 Before editing, if another thread is already running against the same working directory, **stop and tell the user** rather than editing alongside it. Concurrent agents in one checkout produce half-finished intermediate states.
 
 Corollary: a red typecheck or failing test in a tree another live thread is editing is **someone's in-flight edit, not a bug.** Report it as a collision. Do not investigate it, and do not fix it — the owning thread will.
+
+## Machine Capacity
+
+This machine has **10 cores and 16 GB of RAM**, and it is routinely asked to run far more than that. A real incident: 15 concurrent Claude sessions drove the load average to **44** and swap to **16.2 GB of 17.4 GB**, and the machine began crashing. Each session had spun up its own worktree, `node_modules`, `tsc`, dev server, and Playwright run.
+
+**Check the load before starting anything expensive.** Expensive means: a test suite, an E2E run, a production build, `tsc` over a large project, or a dev server.
+
+```bash
+# Healthy when the 1-min average is below the core count.
+uptime; sysctl -n hw.ncpu
+```
+
+- **1-min load < cores** → proceed normally.
+- **1-min load 1–2× cores** → run the one thing you need, not the full gate. Skip E2E.
+- **1-min load > 2× cores** → **stop and tell the user the machine is saturated.** Do not queue more work onto it and do not "just try it anyway" — you will be the process that tips it into swap death. Report the load and say what you were about to run.
+
+**Do not start a background build or dev server you are not about to read the output of.** An unattended `next dev` costs ~290 MB and runs until something kills it.
+
+**Cost is per-session, not per-machine.** Ten sessions each "just running a quick typecheck" is ten full TypeScript programs resident at once. Before adding a session, ask whether an existing thread could do the work instead.
+
+**Clean up before you finish.** Stop dev servers via `nextdev stop` (never `pkill`), close every `agent-browser` session you opened by name, and do not leave Playwright workers running. Leaked processes from finished tasks are the single largest recurring cause of saturation here — sessions from *two days prior* have been found alive.
+
+### Keep each session's builds cheap
+
+- **Playwright defaults to `workers: "50%"` of cores** — 5 workers on this machine, each with its own browser. That is a ~350 MB, 5-core spike from one command.
+
+  **There is no env var for this.** Verified against Playwright 1.63.0 source (`lib/common/config.js`): the precedence is `--debug`/`--pause` → the `--workers` CLI flag → `workers` in `playwright.config.ts` → `"50%"`. No `PLAYWRIGHT_WORKERS` exists, and setting one is silently ignored — the run still spawns 5 workers while you believe it spawned 2.
+
+  Cap it one of two ways, both of which accept a percentage:
+  - Ad hoc: `npx playwright test --workers=2`
+  - Persistent: `workers: process.env.CI ? 1 : '20%'` in `playwright.config.ts`
+- **Prefer the narrowest command.** `tsc --noEmit` on one project beats a repo-wide build; a single spec file beats the suite. Run the broad gate once at the end, not repeatedly along the way.
+- **Prototype mode already says skip the gate** — honor it. The per-change full test run is exactly the waste that saturates this box.
+- **Reuse a running dev server** instead of starting a second one on another port. Check `nextdev list` first.
 
 ## Task Procedure
 
