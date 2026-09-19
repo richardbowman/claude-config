@@ -44,7 +44,16 @@ fi
 # branch
 [ -n "$branch" ] && add "$(jq -nc --arg b "$branch" '{label:$b,kind:"branch"}')"
 
-# PR for the branch — emit a url so the plugin derives prUrl correctly
+# PR for the branch — emit a url so the plugin derives prUrl correctly.
+#
+# Keep emitting this even though the plugin's native git diff bar also shows a
+# PR button: this tag is the DATA SOURCE, not just a pill. ThreadManager's
+# applyStatusTags() -> derivePrUrl() is the only writer of thread.prUrl, which
+# is what the diff bar's "PR #N" label, the Kanban PR chip, and the
+# archive-on-merge release workflow all read. Drop it and prUrl is never set.
+# Duplicate DISPLAY is handled on the plugin side (planFooter suppresses pr/
+# branch pills while the diff bar is visible), so the script stays a plain
+# producer and the plugin decides what's redundant.
 if [ -n "$branch" ] && [ -n "$remote" ]; then
   pr_json=$(gh pr view "$branch" --repo "$remote" --json number,url 2>/dev/null)
   if [ -n "$pr_json" ]; then

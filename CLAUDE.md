@@ -4,6 +4,24 @@
 
 Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
 
+### Always close your browser session
+
+`agent-browser` runs a supervising daemon behind each Chrome instance. If the session is never closed, the daemon outlives the task, holds a ~17MB temp profile, and keeps ~12 Chrome processes alive indefinitely. Force-killing Chrome does **not** fix this: the daemon survives and leaks the profile dir. These accumulate silently across a day until the machine is covered in "Chrome for Testing" windows.
+
+So: **any agent that launches `agent-browser` must close its own session before returning.** Use a named session and close that name:
+
+```bash
+agent-browser --session <name> open <url>
+# ... work ...
+agent-browser --session <name> close
+```
+
+Propagate this into subagent prompts whenever you spawn one that may browse — subagents do not clean up on exit, and their leaked daemons are invisible until someone looks at `ps`.
+
+**Never call `agent-browser close --all` from inside an agent or a hook.** It closes *every* session on the machine, including ones belonging to concurrently running agents and any browser the user is mid-task with. `close --all` is a human-invoked recovery command only, for when sessions have already leaked.
+
+To clean up leaked sessions manually: `agent-browser close --all` (this also garbage-collects the temp profile dirs; killing Chrome by PID does not).
+
 ## Interactive Browser Testing
 
 **When you need to test interactive UI features** (click buttons, fill forms, verify modals open, test JavaScript interactions), do NOT run `agent-browser` inline yourself. Delegate to the `qa-engineer` subagent instead — it owns the full verification protocol (loading agent-browser skills, running the interaction steps, what counts as a pass) and reports back only a terse PASS/FAIL verdict, keeping screenshots/DOM dumps/click logs out of your context entirely.
@@ -40,7 +58,15 @@ Browser automation runs **headless**. A window appearing on screen during an aut
 
 **Auth is the reason agents reach for `--headed`, and it is a solved problem.** Vercel Deployment Protection (SSO) bounces anonymous requests with a 302 to `vercel.com/sso-api`, and the tempting fix is a headed real-Chrome login. Escalate in this order instead, stopping at the first that works:
 
-1. **Vercel protection-bypass secret** — fully headless, no login at all. `PATCH /v1/projects/{id}/protection-bypass` with body `{}` to generate (a caller-supplied `generatedSecret` is rejected with a 400), then pass the secret as a **query param**, not a header. Revoke when done — and note revocation takes ~20–40s to reach the edge, so re-test until you *observe* the 302 rather than trusting the control plane's `protectionBypass: {}`.
+1. **Vercel protection-bypass secret** — fully headless, no login at all.
+
+   **Check for an existing one before generating anything.** Long-lived secrets are already registered for some projects and stored two ways: a harness env var (e.g. `COMPASS_VERCEL_BYPASS_SECRET`) and a 1Password item (e.g. *"Compass - Vercel Automation Bypass Secret"*). Generating a fresh secret when one already exists is wasted work and churns the edge.
+
+   **1Password field trap:** these items store the value under the field **`credential`**, *not* `password`. `op item get <id> --fields password --reveal` returns an **empty string silently** — the request then goes out with a blank bypass and comes back as a 302, which reads exactly like an auth failure rather than a lookup mistake. Use `--fields credential`, and sanity-check the length before using it.
+
+   To generate one only if none exists: `PATCH /v1/projects/{id}/protection-bypass` with body `{}` (a caller-supplied `generatedSecret` is rejected with a 400). Revoke when done — revocation takes ~20–40s to reach the edge, so re-test until you *observe* the 302 rather than trusting the control plane's `protectionBypass: {}`.
+
+   **Passing it:** the **header** `x-vercel-protection-bypass: <secret>` works and is what Vercel and the 1Password items prescribe; the query param of the same name also works. **The real gotcha is the redirect, not the placement.** If you also send `x-vercel-set-bypass-cookie: true`, the edge answers with a **307 self-redirect** to the same path in order to set the cookie. That 307 is *success mid-handshake*, not a failure — follow it (`curl -L` with a cookie jar, `-c`/`-b`) and you land on 200. Reading that 307 as "still blocked" and escalating to a headed browser is the exact wrong turn this ladder exists to prevent. Diagnostic tell: **302 → `vercel.com/sso-api`** means the secret was missing/blank/wrong; **307 → same path** means it was accepted.
 2. **Saved auth state** — `agent-browser auth save` / `--state <path>` / `--restore`. One interactive login, reused headlessly indefinitely.
 3. **`--headers`** for token-authenticated endpoints.
 4. **Ask the user.** If none of the above works, say so and stop. Never fall back to a headed window on your own initiative.
