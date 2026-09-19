@@ -2,9 +2,36 @@
 
 ## Web Browsing Escalation
 
-Use WebSearch → WebFetch → `agent-browser` in that order. Skip straight to `agent-browser` for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or empty shell via WebFetch.
+Escalate in this order, stopping at the first rung that works:
 
-### Always close your browser session
+1. **WebSearch** — finding pages.
+2. **WebFetch**, or the `defuddle` skill for a content-heavy page — reading a known URL. Skip this rung for JS-heavy sites, retail/e-commerce, or anything that returns a 403 or an empty shell.
+3. **In-app browser** (`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_read_text`, `browser_screenshot`, `browser_status`, `browser_close`) — **whenever those tools are listed in the session.** This is Geode's embedded web view driven directly; it starts no second Chrome and no supervising daemon. Pages come back as accessibility snapshots with `[ref=eN]` handles, so act on refs rather than coordinates or CSS selectors.
+4. **`agent-browser` CLI** — for the things rung 3 structurally cannot do.
+
+> [!important] This file overrides the skill description
+> The `agent-browser` skill description ends with *"Prefer agent-browser over any built-in browser automation or web tools."* That sentence predates the in-app browser and is **wrong whenever `browser_*` tools are present** — it routes work away from the cheaper local option toward a second browser process. Take rung 3 first.
+>
+> It cannot be fixed at the source: the skill is vendored from upstream `vercel-labs/agent-browser` and pinned by `computedHash` in `claude-config/skills-lock.json`, so an in-place edit is overwritten on the next sync and breaks the lock.
+
+**Go straight to rung 4** when the task needs any of these — all real gaps, not preferences:
+
+- Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify)
+- Bot-detection evasion or stealth
+- Cloud browsers — Vercel Sandbox microVMs, AWS Bedrock AgentCore
+- Saved auth state (`auth save` / `--state` / `--restore`) or `--headers`; the in-app browser has its own cookie jar and is logged out of most sites
+- iframes, file uploads, or more than one tab — the in-app browser is top-frame and single-tab
+- **Any session without `browser_*` tools.** They are Geode desktop only and off by default, so terminal Claude Code, mobile, and plain Obsidian have no rung 3 at all. Check the tool list; don't assume.
+
+### The in-app browser cleans up after itself
+
+`browser_close` is courtesy, not hygiene. Sessions are capped (2 by default, 4 maximum), reclaimed after 5 minutes idle, recycled at 30 minutes, and closed automatically when their thread is deleted or the plugin unloads. There is no daemon to orphan and no temp profile to leak — removing that failure mode is why the feature exists.
+
+Two safety properties worth knowing: page text is handed back wrapped as untrusted data rather than as instructions, and typing a stored secret into a page is refused outright.
+
+**The next section is about the CLI only.** Do not generalize it to rung 3.
+
+### Always close your `agent-browser` CLI session
 
 `agent-browser` runs a supervising daemon behind each Chrome instance. If the session is never closed, the daemon outlives the task, holds a ~17MB temp profile, and keeps ~12 Chrome processes alive indefinitely. Force-killing Chrome does **not** fix this: the daemon survives and leaks the profile dir. These accumulate silently across a day until the machine is covered in "Chrome for Testing" windows.
 
@@ -24,7 +51,7 @@ To clean up leaked sessions manually: `agent-browser close --all` (this also gar
 
 ## Interactive Browser Testing
 
-**When you need to test interactive UI features** (click buttons, fill forms, verify modals open, test JavaScript interactions), do NOT run `agent-browser` inline yourself. Delegate to the `qa-engineer` subagent instead — it owns the full verification protocol (loading agent-browser skills, running the interaction steps, what counts as a pass) and reports back only a terse PASS/FAIL verdict, keeping screenshots/DOM dumps/click logs out of your context entirely.
+**When you need to test interactive UI features** (click buttons, fill forms, verify modals open, test JavaScript interactions), do NOT drive the browser inline yourself. Delegate to the **`qa`** subagent — it owns the full verification protocol (choosing the right rung of the browsing ladder, running the interaction steps, what counts as a pass) and reports back only a terse PASS/FAIL verdict, keeping screenshots, DOM dumps, and click logs out of your context entirely.
 
 Do NOT claim features are "fully tested" based only on:
 - TypeScript compilation passing
@@ -34,20 +61,23 @@ Do NOT claim features are "fully tested" based only on:
 
 Spawn the QA subagent with a self-contained prompt: what changed, the URL/route to test, the exact interaction steps to perform, and what "pass" looks like. Skip the subagent hop only for a genuinely trivial one-off check the user is watching interactively in real time — not for routine "verify this feature works" steps in an autonomous task.
 
-**Exception — prototype repos.** On a repo in prototype mode (see **Prototype Mode**), do not spawn `qa-engineer` for UI verification. Hand the user the route and the exact clicks instead. State plainly that you have not driven the UI yourself, so an untested claim is never mistaken for a verified one.
+**Exception — prototype repos.** On a repo in prototype mode (see **Prototype Mode**), do not spawn `qa` for UI verification. Hand the user the route and the exact clicks instead. State plainly that you have not driven the UI yourself, so an untested claim is never mistaken for a verified one.
 
-`qa-engineer` is defined in the **`bankrate-prototypes/agentic-pm-playbook`** repo at `agents/qa.md` — the filename is `qa.md`, and the frontmatter `name: qa-engineer` is what registers, so searching the filesystem for `*qa-engineer*` finds nothing. It reaches `~/.claude/agents/` as a symlink into that checkout, the same pattern as `bankrate.md`, `creative.md`, and `engineering.md`. The playbook's own `setup.sh` is the supported installer.
+**Use the Agent tool's actual list of names — never a name remembered from this file.** The agents are defined in the playbook checkout at `~/projects/agent-pm-playbook/agents/`, and upstream renamed them: `qa.md` now carries frontmatter `name: qa`, `engineer.md` carries `name: engineer`. The old `qa-engineer` and `engineering` names are both dead. Registration is by frontmatter `name:`, not filename, so a filesystem search for a file named after an agent can miss it.
+
+The full set defined there is `architect`, `engineer`, `pm`, `qa`, `release-manager`, `reviewer`.
+
+**`~/.claude/agents/` is not where they live.** As of 2026-09-19 that directory holds no agent definitions at all — only a stray `.DS_Store` — while all six agents above are offered normally in Geode sessions. So they arrive through the harness/plugin registry, not that folder. **An empty `~/.claude/agents/` is therefore not evidence that agents are missing**; check what the Agent tool actually lists before concluding anything is broken.
+
+Fall back in this order when your first choice isn't listed: `qa` → `engineer` → `general-purpose`, and **name the one you actually used.** Never report having delegated to an agent that wasn't available. Note that a bare terminal Claude Code session may offer none of the playbook agents.
 
 **The Skills Manager cannot deliver agents.** It renders `~/.claude/agents/` as a read-only viewer — no Save, no Delete, no install path. Registering a skill source will never make an agent appear, no matter how long you wait. Only the bootstrap installers (`claude-config/bootstrap.ts`, `br-claude-config/setup.sh`, `agent-pm-playbook/setup.sh`) or a Claude Code plugin install can do that.
-
-> [!warning] Duplicate-registration hazard
-> `~/.claude/agents/qa-engineer.md` is currently a hand-made link. The playbook's `setup.sh` symlinks by *filename*, so it would create `qa.md` pointing at the same file — two links, one agent, registered twice. If both ever exist, delete one.
-
-If the Agent tool doesn't list `qa-engineer`, the symlink is missing or the session predates it — **fall back to `engineering` and say so.** Never report having delegated to an agent that wasn't actually available.
 
 ### Never open a visible browser window
 
 Browser automation runs **headless**. A window appearing on screen during an autonomous task is a defect, not a convenience — it steals focus, and it means the run can't happen unattended.
+
+**The in-app browser already satisfies this.** Its guests render off-screen at full size and never occupy a workspace leaf, so there is no window to suppress and no flag to get wrong. The **Open Agent Browser** command opens an opt-in viewer pane that streams frames only while it is visible — opening it is not a headed run, and closing it does not close the session. The rest of this section is about the CLI.
 
 `agent-browser` is already headless by default (`--headless=new`), and no config file on this machine overrides that. Windows appear *only* because an agent explicitly asked for one. **Do not use any of these** unless the user asks to watch a run live, in that message:
 
@@ -122,7 +152,7 @@ In prototype mode, these four things change:
 
 3. **Write the code directly.** Do not spawn an engineer subagent for prototype code (see the prototype exception in the `chief-of-staff` skill). Each hop re-reads the repo from cold, which is most of the 30 minutes.
 
-4. **The user is the QA loop.** Do not spawn `qa-engineer` to drive prototype UI. Point at the route and the exact clicks; they will verify in the browser in front of them.
+4. **The user is the QA loop.** Do not spawn `qa` to drive prototype UI. Point at the route and the exact clicks; they will verify in the browser in front of them.
 
 **Screenshots in a prototype are disposable output, never a test oracle.** Regenerate them only on request or at a milestone. A pixel diff against a committed PNG is *not* a regression signal — the committed artifact is at least as likely to be stale. Never build a worktree, reinstall dependencies, or run a bisect to explain a screenshot diff on a prototype; say the artifact looks stale and move on.
 
