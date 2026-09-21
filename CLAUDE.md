@@ -198,6 +198,19 @@ uptime; sysctl -n hw.ncpu
 - **Prototype mode already says skip the gate** — honor it. The per-change full test run is exactly the waste that saturates this box.
 - **Reuse a running dev server** instead of starting a second one on another port. Check `nextdev list` first.
 
+## Asking for a Decision
+
+When you need the user to decide something, use the `AskUserQuestion` tool. Do not write the options out as prose in a chat message and wait for a reply.
+
+Rules for every question:
+
+- **Give real options.** 2–4 choices, each one a distinct path you could actually take. If there is only one viable path, don't ask — just do it and say what you did.
+- **Recommend one.** Put your recommendation first in the list and append "(Recommended)" to its label. Name the tradeoff in the option's description, so the user can see why you picked it.
+- **Ask before you build, not after.** Raise the decision at the point it changes what you do next, not once the work is already down one path.
+- **One question per decision.** Batch up to 4 related decisions into a single call rather than sending several in a row.
+
+Skip the tool when the choice has an obvious default, the answer is discoverable in the codebase, or the question is only "should I proceed". Pick the default, state that you picked it, and keep going.
+
 ## Task Procedure
 
 Follow this procedure for every substantial task on production code. It is not optional. On prototype repos, see **Prototype Mode** above — steps 2–5 still apply, but the per-change verification in step 3 collapses to "does the page render", and the full gate moves to milestones. When spawning subagents for extended autonomous work, propagate this section into their prompts.
