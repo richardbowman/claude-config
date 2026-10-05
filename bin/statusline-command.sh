@@ -98,7 +98,10 @@ if [ -n "$branch" ] && [ -n "$cwd" ]; then
       # Use cached result if < 5 min old
       if [ -f "$cache_file" ]; then
         age=$(( $(date +%s) - $(stat -f%m "$cache_file" 2>/dev/null || stat -c%Y "$cache_file" 2>/dev/null || echo 0) ))
-        [ "$age" -lt 300 ] && preview_url=$(cat "$cache_file")
+        # A hit lives 5 min; an empty result (no READY deploy yet) only 30s, so
+        # the preview link appears soon after the build finishes.
+        ttl=300; [ -s "$cache_file" ] || ttl=30
+        [ "$age" -lt "$ttl" ] && preview_url=$(cat "$cache_file")
       fi
 
       if [ -z "$preview_url" ]; then
@@ -109,7 +112,7 @@ if [ -n "$branch" ] && [ -n "$cwd" ]; then
         # Step 1: find the deployment UID for this branch
         api_resp=$(curl -sf --max-time 4 \
           -H "Authorization: Bearer $vercel_token" \
-          "https://api.vercel.com/v6/deployments?projectId=${v_project_id}&meta.githubCommitRef=${enc_branch}&limit=1&state=READY&target=preview${team_param}" \
+          "https://api.vercel.com/v6/deployments?projectId=${v_project_id}&meta-githubCommitRef=${enc_branch}&limit=1&state=READY&target=preview${team_param}" \
           2>/dev/null)
         dep_uid=$(printf '%s' "$api_resp" | jq -r '.deployments[0].uid // empty' 2>/dev/null)
         fallback_url=$(printf '%s' "$api_resp" | jq -r '.deployments[0].url // empty' 2>/dev/null)
