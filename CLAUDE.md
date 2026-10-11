@@ -164,11 +164,37 @@ Before editing, if another thread is already running against the same working di
 
 Corollary: a red typecheck or failing test in a tree another live thread is editing is **someone's in-flight edit, not a bug.** Report it as a collision. Do not investigate it, and do not fix it — the owning thread will.
 
-## Machine Capacity
+## Heavy work goes to the homelab
 
-This machine has **10 cores and 16 GB of RAM**, and it is routinely asked to run far more than that. A real incident: 15 concurrent Claude sessions drove the load average to **44** and swap to **16.2 GB of 17.4 GB**, and the machine began crashing. Each session had spun up its own worktree, `node_modules`, `tsc`, dev server, and Playwright run.
+The Proxmox homelab (`dev-builder`, `dev-postgres`, and the `tq` test-worker queue) is the **default** place for heavy work. The Mac is the fallback. Before running a typecheck, unit suite, E2E run, production build, `podman run` Postgres, or dev server, follow the `proxmox-devbox` skill and use the homelab unless the check below fails.
 
-**Check the load before starting anything expensive.** Expensive means: a test suite, an E2E run, a production build, `tsc` over a large project, or a dev server.
+- Skill: `proxmox-devbox` (day-to-day recipes, reachability check, fallback rules).
+- Vault notes: `Agent How-Tos/Proxmox Homelab` (SSH access, VM templates, gotchas) and `Agent How-Tos/Test Worker Pool` (`tq submit`, profiles, adding a worker).
+
+| Step | Default (homelab reachable) |
+|---|---|
+| Typecheck, unit tests | `tq-check` (profiles `compass-unit`, `golden-wealth-unit`, `hiptrip-unit`; inferred from the repo remote) or `tq submit --wait --profile <p>` |
+| E2E, production build, anything with no `tq` profile | `ssh dev-builder` |
+| Interactive dev server | `dev-builder`, viewed from the Mac browser at the VM's IP |
+| Postgres for a new project | `dev-postgres` (existing projects on local podman stay local unless asked) |
+
+`tq-check` is added to `~/projects/testq/bin/`; if it is not on PATH yet, use `tq submit` directly.
+
+**Check reachability first, with a short timeout, once per task:**
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=2 dev-builder true && echo reachable
+```
+
+(`tq doctor` is the fuller check.) A `PreToolUse` hook (`bin/homelab-nudge`) prints a one-line reminder when you start a matching command locally while the homelab is reachable. It never blocks.
+
+**Fallback.** If the homelab is unreachable (travelling, off the home LAN, VM down), run the step locally under the load rules below, and **state in the report that you fell back and why**. If the failure is lost authentication (for example an SSH agent with no identities) rather than a down host, say that instead of silently falling back. Run locally even when reachable only for the narrowest checks (one spec file, `tsc` on one small project).
+
+## Machine Capacity (local fallback path)
+
+This machine has **10 cores and 16 GB of RAM**, and it is routinely asked to run far more than that. A real incident: 15 concurrent Claude sessions drove the load average to **44** and swap to **16.2 GB of 17.4 GB**, and the machine began crashing. Each session had spun up its own worktree, `node_modules`, `tsc`, dev server, and Playwright run. This is why heavy work defaults to the homelab above.
+
+**When you do have to run something expensive locally** (homelab unreachable, or a narrow check), check the load first. Expensive means: a test suite, an E2E run, a production build, `tsc` over a large project, or a dev server.
 
 ```bash
 # Healthy when the 1-min average is below the core count.
@@ -183,7 +209,7 @@ uptime; sysctl -n hw.ncpu
 
 **Cost is per-session, not per-machine.** Ten sessions each "just running a quick typecheck" is ten full TypeScript programs resident at once. Before adding a session, ask whether an existing thread could do the work instead.
 
-**Clean up before you finish.** Stop dev servers via `nextdev stop` (never `pkill`), close every `agent-browser` session you opened by name, and do not leave Playwright workers running. Leaked processes from finished tasks are the single largest recurring cause of saturation here — sessions from *two days prior* have been found alive.
+**Clean up before you finish.** Stop dev servers via `nextdev stop` (never `pkill`), close any in-app browser sessions you opened (`browser_close`), and do not leave Playwright workers running. Leaked processes from finished tasks are the single largest recurring cause of saturation here — sessions from *two days prior* have been found alive.
 
 ### Keep each session's builds cheap
 
