@@ -42,6 +42,16 @@
             "statusMessage": "Checking worktree..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/claude-config/bin/homelab-nudge.ts",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "PostToolUse": [
