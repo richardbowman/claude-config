@@ -18,12 +18,12 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "input=$(cat); file=$(echo \"$input\" | jq -r '.tool_input.file_path // .tool_input.filePath // empty'); if [ -z \"$file\" ]; then exit 0; fi; dir=$(dirname \"$file\"); git_root=$(git -C \"$dir\" rev-parse --show-toplevel 2>/dev/null); if [ -z \"$git_root\" ]; then exit 0; fi; branch=$(git -C \"$git_root\" symbolic-ref --short HEAD 2>/dev/null); if [ \"$branch\" = \"main\" ] || [ \"$branch\" = \"master\" ]; then echo \"{\\\"decision\\\":\\\"block\\\",\\\"reason\\\":\\\"On protected branch '$branch'. Create a feature branch first: git checkout -b feat/your-feature-name\\\"}\"; exit 2; fi; exit 0",
-            "statusMessage": "Checking branch..."
+            "command": "node $HOME/claude-config/bin/require-worktree.ts",
+            "statusMessage": "Checking worktree..."
           }
         ]
       },

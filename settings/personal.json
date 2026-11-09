@@ -34,11 +34,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/require-worktree.sh",
+            "command": "node $HOME/claude-config/bin/require-worktree.ts",
             "statusMessage": "Checking worktree..."
           }
         ]
