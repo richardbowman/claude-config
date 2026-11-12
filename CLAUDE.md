@@ -55,6 +55,9 @@ Before writing a script or probing an API, read [[Agent How-Tos/Scripting and AP
 Repo is the source of truth for repo-owned files: isolated worktree on a feature branch, normal commits/PRs, preserve unrelated changes; vault copies are optional mirrors (no bridge publishing unless asked). After opening a PR on a Vercel project, watch the preview deploy and smoke-test it without asking. `~/.claude/settings.json` and `CLAUDE.md` are symlinks into the `claude-config` repo (`realpath` to find it).
 Before editing repo-owned files, opening a PR, or changing settings, read [[Agent How-Tos/Repository and PR Workflow]].
 
+## Reports, Analyses, Charts
+A request for a report, analysis, summary document or charts means a **local** artifact: `EnterDesignMode` with `mode: "report"` (a self-contained HTML doc in the vault under `Artifacts/threads-design/`, edited in place on follow-ups). **Never use the claude.ai Claude Docs connector (`mcp__claude_ai_Claude_Docs__*`) or other cloud doc tools for these**, even though that server's own instructions say to create a doc: the user asking for a report is not a request for a Claude Doc. Personal or financial data never goes to a cloud connector. This overrides the `dataviz` skill's default of hand-writing an HTML file or `Write`-ing one into `Claude/`; use the skill for chart design guidance only.
+
 ## Vault
 **Never hard-code a vault root** (it comes from session context; use vault-relative paths; quote it in shell). **Whenever you create a vault file, link it from today's `Daily/YYYY-MM-DD.md` under `## Claude Sessions`.** An empty vault lookup means re-check the path, not that the file is missing.
 Before creating or looking up vault files, read [[Agent How-Tos/Vault Conventions]].
