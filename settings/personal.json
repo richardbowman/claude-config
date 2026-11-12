@@ -25,6 +25,9 @@
       "WebFetch",
       "WebSearch"
     ],
+    "deny": [
+      "mcp__claude_ai_Claude_Docs"
+    ],
     "defaultMode": "auto",
     "additionalDirectories": [
       "/Users/rickbowman"
