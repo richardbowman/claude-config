@@ -56,5 +56,5 @@ Repo is the source of truth for repo-owned files: isolated worktree on a feature
 Before editing repo-owned files, opening a PR, or changing settings, read [[Agent How-Tos/Repository and PR Workflow]].
 
 ## Vault
-**Never hard-code a vault root** (it comes from session context; use vault-relative paths; quote it in shell). **Whenever you create a vault file, link it from today's `Daily/YYYY-MM-DD.md` under `## Claude Sessions`.** An empty vault lookup means re-check the path, not that the file is missing.
+**Never hard-code a vault root** (it comes from session context; use vault-relative paths; quote it in shell). **Whenever you create a vault file, link it from today's `Operations/Daily/YYYY-MM-DD.md` under `## Claude Sessions`.** An empty vault lookup means re-check the path, not that the file is missing.
 Before creating or looking up vault files, read [[Agent How-Tos/Vault Conventions]].

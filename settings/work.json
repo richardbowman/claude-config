@@ -12,9 +12,9 @@
       "WebSearch",
       "Write(/Users/rbowman/GitHub/bankrate-skills-e2e/*)"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "auto"
   },
-  "model": "us.anthropic.claude-sonnet-4-6",
+  "model": "us.anthropic.claude-sonnet-5-5",
   "hooks": {
     "PreToolUse": [
       {
@@ -74,5 +74,6 @@
         "url": "git@github-bankrate:bankrate/bankrate-agent-skills.git"
       }
     }
-  }
+  },
+  "tui": "fullscreen"
 }
