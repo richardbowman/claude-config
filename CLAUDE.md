@@ -43,6 +43,9 @@ Before touching Vercel protection, bypass secrets, or env vars, read [[Agent How
 Every `op` call can raise a Touch ID dialog. Check env vars first (`env | grep -i <name>`); **never run `op` in parallel, enumerate, or retry a failed/timed-out call**; one call per secret, use `timeout 20`.
 Before any `op` command, read [[Agent How-Tos/1Password CLI Rules]].
 
+## Reports and Documents
+When asked for a report, analysis, summary document, or charts, use `EnterDesignMode` with `mode: "report"` (local HTML artifact saved in the vault; nothing uploaded). Never use the Claude Docs connector (`mcp__claude_ai_Claude_Docs__*`) or Google Docs for these. The Claude Docs connector is denied in `settings.json`.
+
 ## Google Workspace
 Prefer `mcp__google-*` tools for Drive/Docs/Sheets/Slides; use `gws` for everything else (Gmail, Calendar, Tasks, etc.) and for sharing, deletes, comments, revisions. Never raw `curl`, `rclone`, or `gdrive`.
 Before using Google Workspace, read [[Agent How-Tos/Google Workspace Tools]].
