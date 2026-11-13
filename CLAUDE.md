@@ -5,6 +5,7 @@ Lean rules plus triggers. Detail lives in vault runbooks (`Agent How-Tos/`, inde
 ## Asking Questions
 Use `AskUserQuestion` for genuine forks that reduce to 2-4 mutually exclusive options (first option = recommended; batch up to 4). Otherwise pick the sensible default, say so, and proceed. Never use it for plan approval.
 Before asking the user anything, read [[Agent How-Tos/Task Procedure and Gates]].
+**Never ask permission for routine, reversible, read-only actions** (looking something up, searching the web or code, reading files, checking Compass/vault/git state, running read-only commands, opening a preview). Just do it. Don't end a turn with "want me to look into X?" or "should I check?" when checking is cheap and harmless; check, then report. Ask only before irreversible, outward-facing, costly, or genuinely ambiguous-intent actions. Subagents inherit this.
 
 ## Gates Are Not Questions
 - **Never ask whether to run or waive a gate** (QA, pr-checklist, E2E, screenshots). There is no waiver; `BLOCKED: no QA on record` is a to-do list, not a decision. On `Repo mode: prototype` repos the gate does not apply.
