@@ -45,7 +45,9 @@ Every `op` call can raise a Touch ID dialog. Check env vars first (`env | grep -
 Before any `op` command, read [[Agent How-Tos/1Password CLI Rules]].
 
 ## Reports and Documents
-When asked for a report, analysis, summary document, or charts, use `EnterDesignMode` with `mode: "report"` (local HTML artifact saved in the vault; nothing uploaded). Never use the Claude Docs connector (`mcp__claude_ai_Claude_Docs__*`) or Google Docs for these. The Claude Docs connector is denied in `settings.json`.
+**Compass is the system of record for product work.** For a product whose `pm-config.md` names a Compass workspace, put proposals, plans, briefs, analyses, ADRs, QA reports and prototypes in that workspace (Doc, Solution Plan, `ADR`/`QA_REPORT` Doc, or Artifact), linked to the Opportunity, Solution, Task or Decision they concern, and add one daily-note index line linking the item. The routing table lives in the vault `CLAUDE.md` (Long-Form Output Rule) and the `compass-workflow` skill.
+
+Use `EnterDesignMode` with `mode: "report"` (local HTML artifact saved in the vault; nothing uploaded) only when the content is personal or financial, or the work has no Compass workspace. If Compass returns real errors, write a vault note marked `COMPASS-UNAVAILABLE: <error>` and back-fill Compass afterwards. Never use the Claude Docs connector (`mcp__claude_ai_Claude_Docs__*`) or Google Docs for these. The Claude Docs connector is denied in `settings.json`.
 
 ## Google Workspace
 Prefer `mcp__google-*` tools for Drive/Docs/Sheets/Slides; use `gws` for everything else (Gmail, Calendar, Tasks, etc.) and for sharing, deletes, comments, revisions. Never raw `curl`, `rclone`, or `gdrive`.
